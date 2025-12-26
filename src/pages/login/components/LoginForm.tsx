@@ -161,23 +161,24 @@ const LoginForm = ({ className = '' }: LoginFormProps) => {
           {errors.general && (
             <div className="p-4 bg-error/10 border border-error/20 rounded-lg">
               <div className="flex items-center space-x-2">
-                <Icon name="AlertCircle" size={16} className="text-error" />
+                <Icon name="AlertCircle" size={16} className="text-error" aria-hidden="true" />
                 <p className="font-body text-sm text-error">{errors.general}</p>
               </div>
             </div>
           )}
 
-          {/* Username Field */}
+          {/* Username Field - Changed to email type for better validation */}
           <Input
-            label="Username"
-            type="text"
-            placeholder="Enter your username"
+            label="Email"
+            type="email"
+            placeholder="Enter your email"
             value={formData.username}
             onChange={handleInputChange('username')}
             error={errors.username}
             disabled={loginState.isLoading}
             required
             className="w-full"
+            autoComplete="email"
           />
 
           {/* Password Field */}
@@ -192,6 +193,7 @@ const LoginForm = ({ className = '' }: LoginFormProps) => {
               disabled={loginState.isLoading}
               required
               className="w-full pr-12"
+              autoComplete="current-password"
             />
             <button
               type="button"
@@ -202,7 +204,8 @@ const LoginForm = ({ className = '' }: LoginFormProps) => {
             >
               <Icon 
                 name={loginState.showPassword ? 'EyeOff' : 'Eye'} 
-                size={18} 
+                size={18}
+                aria-hidden="true"
               />
             </button>
           </div>
@@ -263,7 +266,7 @@ const LoginForm = ({ className = '' }: LoginFormProps) => {
           {forgotPasswordError && (
             <div className="p-4 bg-error/10 border border-error/20 rounded-lg">
               <div className="flex items-center space-x-2">
-                <Icon name="AlertCircle" size={16} className="text-error" />
+                <Icon name="AlertCircle" size={16} className="text-error" aria-hidden="true" />
                 <p className="font-body text-sm text-error">{forgotPasswordError}</p>
               </div>
             </div>
@@ -272,7 +275,7 @@ const LoginForm = ({ className = '' }: LoginFormProps) => {
           {forgotPasswordSuccess && (
             <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
               <div className="flex items-center space-x-2">
-                <Icon name="CheckCircle" size={16} className="text-green-600" />
+                <Icon name="CheckCircle" size={16} className="text-green-600" aria-hidden="true" />
                 <p className="font-body text-sm text-green-700">
                   Password reset link sent! Check your email inbox.
                 </p>

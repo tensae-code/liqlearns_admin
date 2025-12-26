@@ -16,7 +16,13 @@ export default defineConfig({
     port: 4028,
     host: "0.0.0.0",
     strictPort: true,
-    allowedHosts: ['.amazonaws.com', '.builtwithrocket.new']
+    allowedHosts: ['.amazonaws.com', '.builtwithrocket.new'],
+    cors: {
+      origin: process.env.NODE_ENV === 'production' 
+        ? ['https://yourdomain.com', 'https://www.yourdomain.com'] 
+        : true,
+      credentials: true
+    }
   },
   optimizeDeps: {
     include: ['@supabase/supabase-js'],
