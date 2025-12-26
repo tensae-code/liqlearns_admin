@@ -13,31 +13,23 @@ serve(async (req) => {
   }
 
   try {
-    const url = new URL(req.url);
-    const username = url?.searchParams?.get('u');
+    const { username } = await req?.json();
 
     if (!username) {
       return new Response(
-        JSON.stringify({ error: 'Username parameter is required' }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
+        JSON.stringify({ exists: false }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // Create Supabase client with service role key
-    const supabaseClient = createClient(
-      Deno?.env?.get('SUPABASE_URL') ?? '',
-      Deno?.env?.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Check if username exists
-    const { data, error } = await supabaseClient?.from('user_profiles')?.select('id')?.eq('username', username?.toLowerCase())?.maybeSingle();
-
-    if (error) {
-      throw error;
-    }
+    // Check if username exists in user_profiles table
+    const { data, error } = await supabase.from('user_profiles').select('id').eq('username', username.trim()).single();
 
     return new Response(
       JSON.stringify({ exists: !!data }),
@@ -48,7 +40,7 @@ serve(async (req) => {
     );
   } catch (error) {
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ exists: false, error: error.message }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
