@@ -34,6 +34,30 @@ export interface CheckoutSessionParams {
   metadata?: Record<string, string>;
 }
 
+const getSuccessUrl = (): string => {
+  const isProduction = import.meta.env.PROD;
+  
+  if (isProduction) {
+    return import.meta.env.VITE_PRODUCTION_SUCCESS_URL || 
+           `${import.meta.env.VITE_PRODUCTION_APP_URL}/success` ||
+           'https://liqlearns.com/success';
+  }
+  
+  return import.meta.env.VITE_SUCCESS_URL || 'http://localhost:5173/success';
+};
+
+const getCancelUrl = (): string => {
+  const isProduction = import.meta.env.PROD;
+  
+  if (isProduction) {
+    return import.meta.env.VITE_PRODUCTION_CANCEL_URL || 
+           `${import.meta.env.VITE_PRODUCTION_APP_URL}/cancel` ||
+           'https://liqlearns.com/cancel';
+  }
+  
+  return import.meta.env.VITE_CANCEL_URL || 'http://localhost:5173/cancel';
+};
+
 /**
  * Fetch all active subscription plans from database
  */
@@ -92,24 +116,25 @@ export const createStripeCustomer = async (
   }
 };
 
-/**
- * Create Stripe checkout session for subscription
- */
 export const createCheckoutSession = async (
-  params: CheckoutSessionParams
-): Promise<string | null> => {
+  priceId: string,
+  customerId?: string
+): Promise<string> => {
   try {
-    // Call Supabase Edge Function to create checkout session
     const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-      body: params
+      body: {
+        priceId,
+        customerId,
+        successUrl: getSuccessUrl(),
+        cancelUrl: getCancelUrl(),
+      },
     });
-    
+
     if (error) throw error;
-    
-    return data?.sessionUrl || null;
-  } catch (error) {
+    return data.url;
+  } catch (error: any) {
     console.error('Error creating checkout session:', error);
-    return null;
+    throw new Error(error.message || 'Failed to create checkout session');
   }
 };
 

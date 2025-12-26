@@ -1,7 +1,7 @@
 // Follow Deno deploy requirements
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { Stripe } from 'https://esm.sh/stripe@14.21.0?target=deno';
+
+import Stripe from 'https://esm.sh/stripe@13.6.0?target=deno';
 
 // Declare Deno global for environments that don't have it predefined
 declare const Deno: {
@@ -11,42 +11,83 @@ declare const Deno: {
 };
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
-  apiVersion: '2024-11-20.acacia',
+  apiVersion: '2023-10-16',
   httpClient: Stripe.createFetchHttpClient(),
 });
 
-const cryptoProvider = Stripe.createSubtleCryptoProvider();
+const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
 
-serve(async (req) => {
-  const signature = req.headers.get('Stripe-Signature')
-  const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')
+// Add this block - Initialize Supabase clients
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 
-  if (!signature || !webhookSecret) {
-    return new Response('Missing signature or webhook secret', { status: 400 })
-  }
+const supabaseAdmin = createClient(
+  Deno.env.get('SUPABASE_URL') || '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+);
 
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL') || '',
+  Deno.env.get('SUPABASE_ANON_KEY') || ''
+);
+// End of added block
+
+Deno.serve(async (req) => {
   try {
-    const body = await req.text()
+    const signature = req.headers.get('stripe-signature');
     
-    // Verify webhook signature
-    const event = await stripe.webhooks.constructEventAsync(
-      body,
-      signature,
-      webhookSecret,
-      undefined,
-      cryptoProvider
-    )
+    if (!signature || !webhookSecret) {
+      console.error('Missing signature or webhook secret');
+      return new Response(
+        JSON.stringify({ error: 'Webhook signature verification required' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
 
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    // Get raw body for signature verification
+    const body = await req.text();
+    
+    let event: Stripe.Event;
+    
+    try {
+      // CRITICAL: Verify webhook signature
+      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+      
+      // Log successful verification
+      await supabaseAdmin
+        .from('security_audit_logs')
+        .insert({
+          event_type: 'stripe_webhook_verification',
+          success: true,
+          event_description: `Webhook verified: ${event.type}`,
+          ip_address: req.headers.get('x-forwarded-for') || 'unknown',
+          user_agent: req.headers.get('user-agent') || 'unknown'
+        });
+        
+    } catch (err: any) {
+      console.error('Webhook signature verification failed:', err.message);
+      
+      // Log failed verification attempt
+      await supabaseAdmin
+        .from('security_audit_logs')
+        .insert({
+          event_type: 'stripe_webhook_verification',
+          success: false,
+          event_description: `Verification failed: ${err.message}`,
+          ip_address: req.headers.get('x-forwarded-for') || 'unknown',
+          user_agent: req.headers.get('user-agent') || 'unknown'
+        });
+      
+      return new Response(
+        JSON.stringify({ error: 'Webhook signature verification failed' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
 
-    // Handle different event types
+    // Process verified event
     switch (event.type) {
       case 'checkout.session.completed': {
-        const session = event.data.object as Stripe.Checkout.Session
-        const userId = session.metadata?.userId
+        const session = event.data.object as Stripe.Checkout.Session;
+        const userId = session.metadata?.userId;
 
         if (userId && session.subscription) {
           // Update student profile with subscription info
@@ -137,15 +178,16 @@ serve(async (req) => {
         console.log(`Unhandled event type: ${event.type}`)
     }
 
-    return new Response(JSON.stringify({ received: true }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    })
-  } catch (error) {
-    console.error('Webhook error:', error)
+    return new Response(
+      JSON.stringify({ received: true, event_type: event.type }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error: any) {
+    console.error('Error processing webhook:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 400 }
-    )
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
   }
-})
+});

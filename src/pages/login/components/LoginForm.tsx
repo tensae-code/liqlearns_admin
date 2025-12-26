@@ -7,6 +7,7 @@ import Icon from '../../../components/AppIcon';
 import { LoginFormData, LoginFormErrors, LoginState } from '../types';
 import { useAuth } from '../../../contexts/AuthContext';
 import { supabase } from '../../../lib/supabase';
+import { rateLimitService } from '../../../services/rateLimitService';
 
 interface LoginFormProps {
   className?: string;
@@ -70,35 +71,46 @@ const LoginForm = ({ className = '' }: LoginFormProps) => {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) return;
+    // Check rate limit before attempting login
+    const rateLimitCheck = await rateLimitService.checkLoginRateLimit(formData.username);
+    
+    if (!rateLimitCheck.allowed) {
+      const resetMinutes = Math.ceil((rateLimitCheck.resetTime - Date.now()) / 60000);
+      setErrors({
+        general: `Too many failed login attempts. Please try again in ${resetMinutes} minutes.`
+      });
+      return;
+    }
 
     setLoginState(prev => ({ ...prev, isLoading: true }));
     setErrors({});
 
     try {
-      // Use Supabase authentication
-      const { error } = await signIn(formData.username, formData.password);
+      const { error } = await supabase.auth.signInWithPassword({
+        email: formData.username,
+        password: formData.password,
+      });
 
       if (error) {
-        setErrors({
-          general: error.message || 'Invalid username or password. Please check your credentials and try again.'
-        });
-        setLoginState(prev => ({ ...prev, isLoading: false }));
-      } else {
-        // Clear form data for security
-        setFormData({ username: '', password: '' });
-        
-        // Navigate to loading screen instead of direct to dashboard
-        navigate('/loading-screen');
-        setLoginState(prev => ({ ...prev, isLoading: false }));
+        // Log failed attempt
+        await rateLimitService.logLoginAttempt(formData.username, false);
+        throw error;
       }
-    } catch (error: any) {
+
+      // Log successful attempt
+      await rateLimitService.logLoginAttempt(formData.username, true);
+      
+      navigate('/role-based-dashboard-hub');
+    } catch (err: any) {
+      const errorMessage = err?.message || 'An error occurred during login';
       setErrors({
-        general: error.message || 'Login failed. Please try again later.'
+        general: errorMessage
       });
+      console.error('Login error:', err);
+    } finally {
       setLoginState(prev => ({ ...prev, isLoading: false }));
     }
   };
@@ -156,7 +168,7 @@ const LoginForm = ({ className = '' }: LoginFormProps) => {
   return (
     <>
       {!showForgotPassword ? (
-        <form onSubmit={handleSubmit} className={`space-y-6 ${className}`}>
+        <form onSubmit={handleLogin} className={`space-y-6 ${className}`}>
           {/* General Error Message */}
           {errors.general && (
             <div className="p-4 bg-error/10 border border-error/20 rounded-lg">
