@@ -257,6 +257,8 @@ const SignupForm = () => {
 
       if (error) throw error;
 
+      console.log('🟢 checkUsername', username, { exists: !!data, data });   // ← DEBUG LOG ADDED
+
       setUsernameAvailabilityStatus(data ? 'taken' : 'available');
     } catch (error) {
       console.error('Error checking username:', error);
@@ -283,6 +285,8 @@ const SignupForm = () => {
         .maybeSingle();
 
       if (error) throw error;
+
+      console.log('🟢 checkSponsor', sponsorName, { exists: !!data, allowed: data ? ['student', 'teacher', 'tutor', 'ceo'].includes(data.role.toLowerCase()) : false, data });   // ← DEBUG LOG ADDED
 
       if (data) {
         // UPDATED: Students can now also be sponsors - only admin and support cannot refer
