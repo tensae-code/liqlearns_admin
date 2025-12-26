@@ -6,13 +6,17 @@ import { getSystemStats, getPendingApprovals, getSystemAlerts, handleApprovalAct
 import type { SystemStats, PendingApproval, SystemAlert } from '../../../services/adminDashboardService';
 import { getSupportMetrics, getTickets, updateTicketStatus, getFAQs, type SupportMetrics, type Ticket, type TicketFilters, type FAQ } from '../../../services/supportDashboardService';
 import Icon from '../../../components/AppIcon';
+import SecurityComplianceTab from '../../../components/SecurityComplianceTab';
 
 
 interface AdminDashboardProps {
   activeSection?: string;
 }
 
-export default function AdminDashboard({ activeSection = 'dashboard' }: AdminDashboardProps) {
+export default function AdminDashboard({ activeSection: initialActiveSection = 'dashboard' }: AdminDashboardProps) {
+  // Initialize state with the prop value
+  const [activeSection, setActiveSection] = useState<string>(initialActiveSection);
+  
   const [processingApproval, setProcessingApproval] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [stats, setStats] = useState<SystemStats | null>(null);
@@ -38,6 +42,23 @@ export default function AdminDashboard({ activeSection = 'dashboard' }: AdminDas
 
   // NEW: Analytics state
   const [analyticsTimeRange, setAnalyticsTimeRange] = useState('7days');
+
+  // Tabs for navigation
+  const tabs = [
+    { id: 'dashboard', label: 'Dashboard', icon: Users },
+    { id: 'approvals', label: 'Approvals', icon: CheckCircle },
+    { id: 'settings', label: 'Settings', icon: SettingsIcon },
+    { id: 'support', label: 'Support', icon: MessageSquare },
+    { id: 'users', label: 'Users', icon: User },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'content', label: 'Content', icon: FileText },
+    { id: 'security', label: 'Security', icon: Shield }
+  ];
+
+  // Navigation handler
+  const onSectionChange = (sectionId: string) => {
+    setActiveSection(sectionId);
+  };
 
   // Load dashboard data
   useEffect(() => {
@@ -1076,199 +1097,358 @@ export default function AdminDashboard({ activeSection = 'dashboard' }: AdminDas
     );
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-orange-50 to-white">
-      {loading ? (
-        <div className="flex items-center justify-center min-h-screen">
-          <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-          <span className="ml-2 text-gray-600">Loading dashboard...</span>
+  // NEW: Security & Compliance Section
+  const renderSecurityComplianceSection = () => {
+    return (
+      <div className="space-y-6 bg-white min-h-screen p-6">
+        <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-2xl p-8 text-white shadow-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold mb-2">Security & Compliance</h1>
+              <p className="text-red-100 text-lg">Data protection, access control, and compliance monitoring</p>
+            </div>
+            <Shield className="w-16 h-16 text-red-200" />
+          </div>
         </div>
-      ) : (
+
+        {/* Security Overview */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Active Sessions</p>
+                <p className="text-3xl font-bold text-gray-900">12</p>
+                <p className="text-sm text-orange-600">Needs review</p>
+              </div>
+              <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg flex items-center justify-center">
+                <Clock className="w-6 h-6 text-white" />
+              </div>
+            </div>
+            <div className="text-sm text-gray-600">
+              <p className="mb-1">Last active: 2 minutes ago</p>
+              <p className="mb-1">Location: 192.168.1.100</p>
+              <p className="mb-1">Device: Windows 11</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Data Access</p>
+                <p className="text-3xl font-bold text-gray-900">42</p>
+                <p className="text-sm text-green-600">Within limits</p>
+              </div>
+              <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-green-600 rounded-lg flex items-center justify-center">
+                <Shield className="w-6 h-6 text-white" />
+              </div>
+            </div>
+            <div className="text-sm text-gray-600">
+              <p className="mb-1">Compliance: GDPR, CCPA, HIPAA</p>
+              <p className="mb-1">Last audit: 3 days ago</p>
+              <p className="mb-1">Status: All systems compliant</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Security Alerts</p>
+                <p className="text-3xl font-bold text-gray-900">0</p>
+                <p className="text-sm text-green-600">No incidents</p>
+              </div>
+              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-white" />
+              </div>
+            </div>
+            <div className="text-sm text-gray-600">
+              <p className="mb-1">Last scan: 1 hour ago</p>
+              <p className="mb-1">Vulnerabilities: 0 critical</p>
+              <p className="mb-1">Patch level: 100%</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Security Controls */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Security Controls</h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg bg-gray-50">
+              <div>
+                <p className="font-medium text-gray-900">Multi-Factor Authentication</p>
+                <p className="text-sm text-gray-600">Enabled for all users</p>
+              </div>
+              <input type="checkbox" defaultChecked className="w-5 h-5 text-blue-500 rounded" />
+            </div>
+            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg bg-gray-50">
+              <div>
+                <p className="font-medium text-gray-900">Data Encryption</p>
+                <p className="text-sm text-gray-600">AES-256 encryption in transit and at rest</p>
+              </div>
+              <input type="checkbox" defaultChecked className="w-5 h-5 text-blue-500 rounded" />
+            </div>
+            <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg bg-gray-50">
+              <div>
+                <p className="font-medium text-gray-900">Session Timeout</p>
+                <p className="text-sm text-gray-600">30 minutes inactive</p>
+              </div>
+              <input type="checkbox" defaultChecked className="w-5 h-5 text-blue-500 rounded" />
+            </div>
+          </div>
+        </div>
+
+        {/* Compliance Status */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Compliance Status</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+              <div className="flex items-center space-x-2 mb-2">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <span className="font-medium text-green-800">GDPR Compliance</span>
+              </div>
+              <p className="text-sm text-green-700">All data processing activities documented and compliant</p>
+            </div>
+            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+              <div className="flex items-center space-x-2 mb-2">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <span className="font-medium text-green-800">CCPA Compliance</span>
+              </div>
+              <p className="text-sm text-green-700">User data access and processing transparent</p>
+            </div>
+            <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+              <div className="flex items-center space-x-2 mb-2">
+                <AlertCircle className="w-5 h-5 text-yellow-600" />
+                <span className="font-medium text-yellow-800">HIPAA Compliance</span>
+              </div>
+              <p className="text-sm text-yellow-700">HIPAA data handling requires additional review</p>
+            </div>
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-center space-x-2 mb-2">
+                <Shield className="w-5 h-5 text-blue-600" />
+                <span className="font-medium text-blue-800">Data Retention</span>
+              </div>
+              <p className="text-sm text-blue-700">Retention policy in place for 7 years</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Navigation Tabs */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="flex items-center space-x-2 p-2 overflow-x-auto">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => onSectionChange(tab.id)}
+              className={`flex items-center space-x-2 px-4 py-3 rounded-lg whitespace-nowrap transition-all ${
+                activeSection === tab.id
+                  ? 'bg-orange-500 text-white shadow-md'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <tab.icon className="w-5 h-5" />
+              <span className="font-medium">{tab.label}</span>
+            </button>
+          ))}
+          {/* Add Security & Compliance Tab */}
+          <button
+            onClick={() => onSectionChange('security')}
+            className={`flex items-center space-x-2 px-4 py-3 rounded-lg whitespace-nowrap transition-all ${
+              activeSection === 'security' ?'bg-orange-500 text-white shadow-md' :'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <Shield className="w-5 h-5" />
+            <span className="font-medium">Security & Compliance</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Render content based on active section */}
+      {activeSection === 'dashboard' && (
         <>
-          {/* Render content based on active section */}
-          {activeSection === 'dashboard' && (
-            <>
-              {/* Welcome header */}
-              <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 sm:p-8 rounded-2xl shadow-lg mb-6">
-                <div className="flex items-center justify-between">
+          {/* Welcome header */}
+          <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 sm:p-8 rounded-2xl shadow-lg mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold mb-2">Admin Dashboard</h1>
+                <p className="text-orange-100">System Overview & Management</p>
+              </div>
+              <Shield className="h-16 w-16 text-orange-200" />
+            </div>
+            
+            {/* Quick stats */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <span className="text-gray-700 font-medium">Total Students</span>
+                <span className="font-bold text-gray-900 text-lg">{stats?.totalStudents || 0}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <span className="text-gray-700 font-medium">Total Teachers</span>
+                <span className="font-bold text-gray-900 text-lg">{stats?.totalTeachers || 0}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <span className="text-gray-700 font-medium">Total Admins</span>
+                <span className="font-bold text-gray-900 text-lg">{stats?.totalAdmins || 0}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Stats grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            {systemStatsCards.map((stat, index) => {
+              const Icon = stat.icon;
+              const colorClasses = {
+                orange: 'bg-orange-50 text-orange-600 border-orange-200',
+                green: 'bg-green-50 text-green-600 border-green-200', 
+                blue: 'bg-blue-50 text-blue-600 border-blue-200',
+                purple: 'bg-purple-50 text-purple-600 border-purple-200'
+              };
+              
+              return (
+                <div key={index} className="bg-white rounded-xl p-6 shadow-sm border-2 border-gray-100 hover:shadow-md transition-all duration-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${colorClasses[stat.color as keyof typeof colorClasses]} border-2`}>
+                      <Icon className="w-6 h-6" />
+                    </div>
+                    <span className={`text-base font-semibold px-3 py-1 rounded-lg ${
+                      stat.trend === 'up' ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'
+                    }`}>
+                      {stat.change}
+                    </span>
+                  </div>
                   <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold mb-2">Admin Dashboard</h1>
-                    <p className="text-orange-100">System Overview & Management</p>
-                  </div>
-                  <Shield className="h-16 w-16 text-orange-200" />
-                </div>
-                
-                {/* Quick stats */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <span className="text-gray-700 font-medium">Total Students</span>
-                    <span className="font-bold text-gray-900 text-lg">{stats?.totalStudents || 0}</span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <span className="text-gray-700 font-medium">Total Teachers</span>
-                    <span className="font-bold text-gray-900 text-lg">{stats?.totalTeachers || 0}</span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <span className="text-gray-700 font-medium">Total Admins</span>
-                    <span className="font-bold text-gray-900 text-lg">{stats?.totalAdmins || 0}</span>
+                    <p className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</p>
+                    <p className="text-sm font-medium text-gray-600">{stat.title}</p>
                   </div>
                 </div>
-              </div>
+              );
+            })}
+          </div>
 
-              {/* Stats grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                {systemStatsCards.map((stat, index) => {
-                  const Icon = stat.icon;
-                  const colorClasses = {
-                    orange: 'bg-orange-50 text-orange-600 border-orange-200',
-                    green: 'bg-green-50 text-green-600 border-green-200', 
-                    blue: 'bg-blue-50 text-blue-600 border-blue-200',
-                    purple: 'bg-purple-50 text-purple-600 border-purple-200'
-                  };
-                  
-                  return (
-                    <div key={index} className="bg-white rounded-xl p-6 shadow-sm border-2 border-gray-100 hover:shadow-md transition-all duration-200">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${colorClasses[stat.color as keyof typeof colorClasses]} border-2`}>
-                          <Icon className="w-6 h-6" />
-                        </div>
-                        <span className={`text-base font-semibold px-3 py-1 rounded-lg ${
-                          stat.trend === 'up' ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'
+          {/* Three column layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* System alerts */}
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-xl p-6 shadow-sm border-2 border-gray-100">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold text-gray-900">System Alerts</h2>
+                </div>
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {systemAlerts.length === 0 ? (
+                      <div className="text-center py-8">
+                        <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-500" />
+                        <p className="text-gray-500">No system alerts</p>
+                      </div>
+                    ) : (
+                      systemAlerts.map((alert) => (
+                        <div key={alert.id} className={`p-4 rounded-xl border-l-4 ${
+                          alert.type === 'warning' ? 'bg-yellow-50 border-yellow-500' :
+                          alert.type === 'error' ? 'bg-red-50 border-red-500' :
+                          alert.type === 'info'? 'bg-blue-50 border-blue-500' : 'bg-green-50 border-green-500'
                         }`}>
-                          {stat.change}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</p>
-                        <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                      </div>
-                    </div>
-                  );
-                })}
+                          <div className="flex items-start space-x-3">
+                            {alert.type === 'warning' && <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />}
+                            {alert.type === 'error' && <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />}
+                            {alert.type === 'info' && <Clock className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />}
+                            {alert.type === 'success' && <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-gray-900">{alert.message}</p>
+                              <p className="text-xs text-gray-500 mt-1">{alert.time}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
+            </div>
 
-              {/* Three column layout */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* System alerts */}
-                <div className="lg:col-span-2">
-                  <div className="bg-white rounded-xl p-6 shadow-sm border-2 border-gray-100">
-                    <div className="flex items-center justify-between mb-6">
-                      <h2 className="text-xl font-bold text-gray-900">System Alerts</h2>
-                    </div>
-                    {loading ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
+            {/* Pending approvals */}
+            <div>
+              <div className="bg-white rounded-xl p-6 shadow-sm border-2 border-gray-100">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold text-gray-900">Pending Approvals</h2>
+                  <span className="bg-orange-100 text-orange-800 px-4 py-2 rounded-full text-sm font-bold border border-orange-200">
+                    {pendingApprovals.length} items
+                  </span>
+                </div>
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {pendingApprovals.length === 0 ? (
+                      <div className="text-center py-8">
+                        <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-500" />
+                        <p className="text-gray-500 font-medium">All caught up! No pending approvals.</p>
                       </div>
                     ) : (
-                      <div className="space-y-3">
-                        {systemAlerts.length === 0 ? (
-                          <div className="text-center py-8">
-                            <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-500" />
-                            <p className="text-gray-500">No system alerts</p>
+                      pendingApprovals.map((approval) => (
+                        <div key={approval.id} className="flex items-center justify-between p-5 border-2 border-gray-100 rounded-xl hover:shadow-md hover:border-orange-200 transition-all duration-200">
+                          <div className="flex items-center space-x-4 flex-1 min-w-0">
+                            <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center border-2 border-orange-200 flex-shrink-0">
+                              <Clock className="w-6 h-6 text-orange-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-bold text-gray-900 mb-1">{approval.name}</h3>
+                              <p className="text-sm text-gray-600 mb-1">{approval.details}</p>
+                              <p className="text-xs text-gray-500">{approval.submitted}</p>
+                            </div>
                           </div>
-                        ) : (
-                          systemAlerts.map((alert) => (
-                            <div key={alert.id} className={`p-4 rounded-xl border-l-4 ${
-                              alert.type === 'warning' ? 'bg-yellow-50 border-yellow-500' :
-                              alert.type === 'error' ? 'bg-red-50 border-red-500' :
-                              alert.type === 'info'? 'bg-blue-50 border-blue-500' : 'bg-green-50 border-green-500'
+                          <div className="flex items-center space-x-3 ml-4 flex-shrink-0">
+                            <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${
+                              approval.priority === 'High' ? 'bg-red-50 text-red-800 border-red-200' :
+                              approval.priority === 'Medium'? 'bg-yellow-50 text-yellow-800 border-yellow-200' : 'bg-green-50 text-green-800 border-green-200'
                             }`}>
-                              <div className="flex items-start space-x-3">
-                                {alert.type === 'warning' && <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />}
-                                {alert.type === 'error' && <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />}
-                                {alert.type === 'info' && <Clock className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />}
-                                {alert.type === 'success' && <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />}
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-semibold text-gray-900">{alert.message}</p>
-                                  <p className="text-xs text-gray-500 mt-1">{alert.time}</p>
-                                </div>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Pending approvals */}
-                <div>
-                  <div className="bg-white rounded-xl p-6 shadow-sm border-2 border-gray-100">
-                    <div className="flex items-center justify-between mb-6">
-                      <h2 className="text-xl font-bold text-gray-900">Pending Approvals</h2>
-                      <span className="bg-orange-100 text-orange-800 px-4 py-2 rounded-full text-sm font-bold border border-orange-200">
-                        {pendingApprovals.length} items
-                      </span>
-                    </div>
-                    {loading ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {pendingApprovals.length === 0 ? (
-                          <div className="text-center py-8">
-                            <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-500" />
-                            <p className="text-gray-500 font-medium">All caught up! No pending approvals.</p>
+                              {approval.priority}
+                            </span>
+                            {processingApproval === approval.id ? (
+                              <Loader2 className="w-5 h-5 text-orange-600 animate-spin" />
+                            ) : (
+                              <>
+                                <button 
+                                  onClick={() => handleApproval(approval, 'approve')}
+                                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors shadow-sm"
+                                >
+                                  Approve
+                                </button>
+                                <button 
+                                  onClick={() => handleApproval(approval, 'reject')}
+                                  className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition-colors shadow-sm"
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            )}
                           </div>
-                        ) : (
-                          pendingApprovals.map((approval) => (
-                            <div key={approval.id} className="flex items-center justify-between p-5 border-2 border-gray-100 rounded-xl hover:shadow-md hover:border-orange-200 transition-all duration-200">
-                              <div className="flex items-center space-x-4 flex-1 min-w-0">
-                                <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center border-2 border-orange-200 flex-shrink-0">
-                                  <Clock className="w-6 h-6 text-orange-600" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <h3 className="font-bold text-gray-900 mb-1">{approval.name}</h3>
-                                  <p className="text-sm text-gray-600 mb-1">{approval.details}</p>
-                                  <p className="text-xs text-gray-500">{approval.submitted}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center space-x-3 ml-4 flex-shrink-0">
-                                <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${
-                                  approval.priority === 'High' ? 'bg-red-50 text-red-800 border-red-200' :
-                                  approval.priority === 'Medium'? 'bg-yellow-50 text-yellow-800 border-yellow-200' : 'bg-green-50 text-green-800 border-green-200'
-                                }`}>
-                                  {approval.priority}
-                                </span>
-                                {processingApproval === approval.id ? (
-                                  <Loader2 className="w-5 h-5 text-orange-600 animate-spin" />
-                                ) : (
-                                  <>
-                                    <button 
-                                      onClick={() => handleApproval(approval, 'approve')}
-                                      className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors shadow-sm"
-                                    >
-                                      Approve
-                                    </button>
-                                    <button 
-                                      onClick={() => handleApproval(approval, 'reject')}
-                                      className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition-colors shadow-sm"
-                                    >
-                                      Reject
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
+                        </div>
+                      ))
                     )}
                   </div>
-                </div>
+                )}
               </div>
-            </>
-          )}
-
-          {activeSection === 'approvals' && renderApprovalsSection()}
-          {activeSection === 'settings' && renderSettingsSection()}
-          {activeSection === 'support' && renderSupportSection()}
-          {activeSection === 'users' && renderUserManagementSection()}
-          {activeSection === 'analytics' && renderAnalyticsSection()}
-          {activeSection === 'content' && renderContentManagementSection()}
+            </div>
+          </div>
         </>
       )}
+
+      {activeSection === 'approvals' && renderApprovalsSection()}
+      {activeSection === 'settings' && renderSettingsSection()}
+      {activeSection === 'support' && renderSupportSection()}
+      {activeSection === 'users' && renderUserManagementSection()}
+      {activeSection === 'analytics' && renderAnalyticsSection()}
+      {activeSection === 'content' && renderContentManagementSection()}
+      {activeSection === 'security' && <SecurityComplianceTab />}
     </div>
   );
 }

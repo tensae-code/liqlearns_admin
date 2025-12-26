@@ -155,7 +155,7 @@ const SignupForm = () => {
     policiesAccepted: '',
     sponsorName: '',
     applicationData: null as any,
-    verificationType: 'phone\' as \'phone\' | \'email', // FIXED: Proper TypeScript union type syntax
+    verificationType: 'phone\' as \'phone\' | \'email', // FIXED: Proper TypeScript type annotation
   });
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [twoFactorVerified, setTwoFactorVerified] = useState(false);

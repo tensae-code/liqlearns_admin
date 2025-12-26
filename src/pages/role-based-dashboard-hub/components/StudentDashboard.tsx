@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Trophy, Target, Zap, Star, TrendingUp, Calendar, Play, BookMarked, Headphones, Music, Gamepad2, BookAudio, Type, FileText, Dumbbell, BookCopy, Film, DollarSign, Users, Share2, Link2, Package, Edit3, Plus, Upload, Check, X, MessageSquare } from 'lucide-react';
+import { Trophy, Target, Zap, Star, TrendingUp, Calendar, Play, BookMarked, Headphones, Music, Gamepad2, BookAudio, Type, FileText, Dumbbell, BookCopy, Film, DollarSign, Users, Share2, Link2, Package, Edit3, Plus, Upload, Check, X, MessageSquare, BookOpen } from 'lucide-react';
 import { Search, Filter, ShoppingCart, Award, Download, Eye, Heart } from 'lucide-react';
-import { BookOpen } from 'lucide-react';
 import { Video } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -985,7 +984,8 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
               disabled={(dailyMissions || []).length >= 7}
               className={`px-3 sm:px-4 py-2 rounded-lg transition-colors flex items-center gap-2 text-xs sm:text-sm font-medium ${
                 (dailyMissions || []).length >= 7
-                  ? 'bg-white/30 text-white/60 cursor-not-allowed' :'bg-white text-orange-600 hover:bg-orange-50'
+                  ? 'bg-white/30 text-white/60 cursor-not-allowed' 
+                  : 'bg-white text-orange-600 hover:bg-orange-50'
               }`}
             >
               <Plus className="w-4 h-4" />
@@ -1381,7 +1381,8 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
                     </p>
                     <span className={`text-xs px-2 py-1 rounded-full ${
                       member.isActive 
-                        ? 'bg-green-100 text-green-700' :'bg-gray-100 text-gray-600'
+                        ? 'bg-green-100 text-green-700' 
+                        : 'bg-gray-100 text-gray-600'
                     }`}>
                       {member.isActive ? 'Active' : 'Inactive'}
                     </span>
@@ -1612,7 +1613,8 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
                       isToday 
                         ? 'bg-orange-500 border-orange-600 text-white' 
                         : hasEvent 
-                        ? 'bg-blue-50 border-blue-200 hover:bg-blue-100' :'border-gray-200 hover:bg-gray-50'
+                        ? 'bg-blue-50 border-blue-200 hover:bg-blue-100' 
+                        : 'border-gray-200 hover:bg-gray-50'
                     }`}
                   >
                     <span className={`text-xs sm:text-sm font-medium ${isToday ? 'text-white' : 'text-gray-900'}`}>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Camera, Lock, Bell, Shield, Mail, Phone, MapPin, Calendar, Languages, Save, Globe, Target } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import GDPRPrivacySection from '../../components/GDPRPrivacySection';
 
 interface SettingsProfileManagementProps {
   userRole?: string;
@@ -118,6 +119,7 @@ const SettingsProfileManagement: React.FC<SettingsProfileManagementProps> = ({ u
                 { icon: Bell, label: 'Notifications', id: 'notifications' },
                 { icon: Languages, label: 'Language & Region', id: 'language' },
                 { icon: Shield, label: 'Privacy Settings', id: 'privacy' },
+                { icon: Shield, label: 'GDPR & Privacy', id: 'gdpr' },
                 ...(showLearningGoals ? [{ icon: Target, label: 'Learning Goals', id: 'goals' }] : [])
               ].map((item) => (
                 <button
@@ -394,6 +396,9 @@ const SettingsProfileManagement: React.FC<SettingsProfileManagementProps> = ({ u
               </div>
             </div>
           )}
+
+          {/* GDPR Privacy Section */}
+          {activeSection === 'gdpr' && <GDPRPrivacySection />}
 
           {/* Account Security */}
           {activeSection === 'security' && (

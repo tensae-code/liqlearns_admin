@@ -13,19 +13,14 @@ import EmployeeApplicationForm from './pages/employee-application-form';
 import ResetPasswordPage from './pages/reset-password';
 import SettingsProfileManagement from './pages/settings-profile-management';
 import MarketplaceHub from './pages/marketplace-hub';
-import SecurityComplianceManagementCenter from './pages/security-compliance-management-center';
-import EnhancedCourseManagementHub from './pages/enhanced-course-management-hub';
-import GDPRCompliancePrivacyCenter from './pages/gdpr-compliance-privacy-center';
 
 const RoutesContent: React.FC = () => {
-  // Initialize Google Analytics tracking
   useGoogleAnalytics();
 
   return (
     <ErrorBoundary>
       <ScrollToTop />
       <RouterRoutes>
-        {/* Define your routes here */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/landing-page" element={<LandingPage />} />
         <Route path="/loading-screen" element={<LoadingScreen />} />
@@ -35,9 +30,6 @@ const RoutesContent: React.FC = () => {
         <Route path="/settings-profile-management" element={<SettingsProfileManagement />} />
         <Route path="/employee-application-form" element={<EmployeeApplicationForm />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
-        <Route path="/security-compliance-management-center" element={<SecurityComplianceManagementCenter />} />
-        <Route path="/enhanced-course-management-hub" element={<EnhancedCourseManagementHub />} />
-        <Route path="/gdpr-compliance-privacy-center" element={<GDPRCompliancePrivacyCenter />} />
         <Route path="*" element={<NotFound />} />
       </RouterRoutes>
     </ErrorBoundary>
