@@ -183,6 +183,29 @@ html {
   }
 }
 
+/* ADDITIVE: Prevent horizontal scroll on small screens */
+body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* ADDITIVE: Hero section height fix for mobile */
+.hero-section {
+  min-height: calc(100vh - 4rem);
+}
+
+@media (min-width: 768px) {
+  .hero-section {
+    min-height: 100vh;
+  }
+}
+
+/* ADDITIVE: Force card text wrap to prevent overflow */
+.prose * {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
 /* Real-time data indicator */
 @keyframes realtime-pulse {
   0% {
