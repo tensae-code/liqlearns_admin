@@ -1,0 +1,3389 @@
+import React, { useEffect, useState } from 'react';
+import { Trophy, Target, Zap, Star, TrendingUp, Calendar, Play, BookMarked, Headphones, Music, Gamepad2, BookAudio, Type, FileText, Dumbbell, BookCopy, Film, DollarSign, Users, Share2, Link2, Package, Edit3, Plus, Upload, Check, X, MessageSquare } from 'lucide-react';
+import { Search, Filter, ShoppingCart, Award, Download, Eye, Heart } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
+import { Video } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import { useAuth } from '../../../contexts/AuthContext';
+import { 
+  studentDashboardService, 
+  StudentStats, 
+  SkillProgress, 
+  Achievement, 
+  DailyMission,
+  StudyCalendarEvent 
+} from '../../../services/studentDashboardService';
+import { marketplaceService, MarketplaceProduct, PaymentMethod, ProductCategory } from '../../../services/marketplaceService';
+import { resourceUnlockService, TutoringResource, StudentLevel } from '../../../services/resourceUnlockService';
+// NEW: Import LMS Service
+import { lmsService } from '../../../services/lmsService';
+import { Assignment, CourseDiscussion, QuizTemplate, GradeRecord, CourseSyllabus, CourseAttendance, AttendanceStats, CourseOutcome, StudentOutcomeProgress, CourseFile, CoursePerson, CourseAnalytics } from '../../../services/lmsService';
+import { studyRoomService } from '../../../services/studyRoomService';
+// NEW: Import Phase 2 services
+import { 
+  certificateService, 
+  subscriptionService, 
+  gamificationService, 
+  mlmEarnersService,
+  StudentCertificate,
+  SubscriptionPlan,
+  BadgeProgress,
+  MLMNetwork,
+  MLMCommission,
+  PayoutRequest,
+  DownlineMember
+} from '../../../services/phase2Service';
+import { communityService, CommunityPost } from '../../../services/communityService';
+import { calendarEventsService, CalendarEvent } from '../../../services/calendarEventsService';
+import Icon from '../../../components/AppIcon';
+import CourseSelectionCard, { CourseOption } from './CourseSelectionCard';
+// NEW: Import VirtualClassroomHub component
+import VirtualClassroomHub from './VirtualClassroomHub';
+// NEW: Import StreakGiftAnimation component
+import StreakGiftAnimation from './StreakGiftAnimation';
+// NEW: Import HelpCenter component
+import HelpCenter from './HelpCenter';
+// NEW: Import StudyRoomHub component
+import StudyRoomHub from '../../../components/StudyRoomHub';
+// NEW: Import StatCardModal component
+import StatCardModal, { StatCardType } from '../../../components/StatCardModal';
+
+// NEW: Import CourseContentView component
+import CourseContentView from './CourseContentView';
+// NEW: Import courseContentService for course mapping
+import { courseContentService } from '../../../services/courseContentService';
+
+import { User } from '../../user-management-dashboard/types/index';
+
+// NEW: Add courseOptions constant at the top level
+const courseOptions = [
+  {
+    id: '1',
+    name: 'Amharic Language',
+    type: 'amharic',
+    icon: BookOpen,
+    color: 'bg-gradient-to-br from-orange-500 to-orange-600',
+    skillCount: 12,
+    difficulty: 'intermediate' as const,
+    estimatedTime: '6 months',
+    description: 'Master Amharic from basics to advanced conversation'
+  },
+  {
+    id: '2',
+    name: 'Ethiopian Culture',
+    type: 'culture',
+    icon: Users,
+    color: 'bg-gradient-to-br from-green-500 to-green-600',
+    skillCount: 8,
+    difficulty: 'beginner' as const,
+    estimatedTime: '3 months',
+    description: 'Explore Ethiopian traditions, history, and customs'
+  },
+  {
+    id: '3',
+    name: 'Mathematics',
+    type: 'mathematics',
+    icon: Target,
+    color: 'bg-gradient-to-br from-blue-500 to-blue-600',
+    skillCount: 15,
+    difficulty: 'advanced' as const,
+    estimatedTime: '12 months',
+    description: 'From basic arithmetic to advanced mathematics'
+  },
+  {
+    id: '4',
+    name: 'Science',
+    type: 'science',
+    icon: Zap,
+    color: 'bg-gradient-to-br from-purple-500 to-purple-600',
+    skillCount: 10,
+    difficulty: 'intermediate' as const,
+    estimatedTime: '8 months',
+    description: 'Physics, Chemistry, and Biology fundamentals'
+  },
+  {
+    id: '5',
+    name: 'English Language',
+    type: 'english',
+    icon: Type,
+    color: 'bg-gradient-to-br from-red-500 to-red-600',
+    skillCount: 14,
+    difficulty: 'beginner' as const,
+    estimatedTime: '6 months',
+    description: 'English reading, writing, and conversation skills'
+  },
+  {
+    id: '6',
+    name: 'Technology & Coding',
+    type: 'technology',
+    icon: Trophy,
+    color: 'bg-gradient-to-br from-indigo-500 to-indigo-600',
+    skillCount: 20,
+    difficulty: 'advanced' as const,
+    estimatedTime: '12 months',
+    description: 'Programming, web development, and computer science'
+  }
+];
+
+// Circular Progress Component
+interface CircularProgressProps {
+  progress: number;
+  color: string;
+  skillName: string;
+  size?: number;
+  strokeWidth?: number;
+}
+
+const CircularProgress: React.FC<CircularProgressProps> = ({ 
+  progress, 
+  color, 
+  skillName, 
+  size = 120, 
+  strokeWidth = 8 
+}) => {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const offset = circumference - (progress / 100) * circumference;
+
+  const getColorClasses = (color: string) => {
+    const colorMap: { [key: string]: string } = {
+      'bg-blue-500': '#3B82F6',
+      'bg-green-500': '#10B981',
+      'bg-purple-500': '#8B5CF6',
+      'bg-orange-500': '#F97316'
+    };
+    return colorMap[color] || '#3B82F6';
+  };
+
+  const strokeColor = getColorClasses(color);
+
+  // Make size responsive
+  const responsiveSize = typeof window !== 'undefined' && window.innerWidth < 640 ? Math.min(size * 0.8, 100) : size;
+
+  return (
+    <div className="flex flex-col items-center w-full">
+      <div className="relative overflow-visible" style={{ width: responsiveSize, height: responsiveSize, minWidth: responsiveSize, minHeight: responsiveSize }}>
+        <svg
+          className="transform -rotate-90 overflow-visible"
+          width={responsiveSize}
+          height={responsiveSize}
+          style={{ display: 'block' }}
+        >
+          {/* Background circle */}
+          <circle
+            cx={responsiveSize / 2}
+            cy={responsiveSize / 2}
+            r={radius}
+            stroke="#E5E7EB"
+            strokeWidth={strokeWidth}
+            fill="none"
+          />
+          {/* Progress circle */}
+          <circle
+            cx={responsiveSize / 2}
+            cy={responsiveSize / 2}
+            r={radius}
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            className="transition-all duration-1000 ease-out"
+          />
+        </svg>
+        {/* Center text */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-xl sm:text-2xl font-bold text-gray-900">{progress}%</span>
+        </div>
+      </div>
+      <p className="mt-2 sm:mt-3 text-xs sm:text-sm font-semibold text-gray-700 text-center">{skillName}</p>
+    </div>
+  );
+};
+
+// Updated Tutoring Resources Card Component with unlock indicator
+interface ResourceCardProps {
+  icon: React.ElementType;
+  name: string;
+  color: string;
+  unlockNumber?: string;
+  isLocked?: boolean;
+  unlockText?: string;
+}
+
+const ResourceCard: React.FC<ResourceCardProps> = ({ 
+  icon: Icon, 
+  name, 
+  color, 
+  unlockNumber, 
+  isLocked = false,
+  unlockText 
+}) => {
+  return (
+    <button 
+      className={`relative flex flex-col items-center justify-center p-3 sm:p-4 md:p-6 bg-white rounded-lg sm:rounded-xl hover:shadow-lg transition-all duration-200 transform hover:scale-105 border border-gray-100 ${
+        isLocked ? 'opacity-60 cursor-not-allowed' : ''
+      }`}
+      disabled={isLocked}
+    >
+      {/* Unlock number badge - top right */}
+      {unlockNumber && (
+        <div className="absolute top-1 right-1 sm:top-2 sm:right-2 bg-orange-500 text-white text-xs sm:text-sm font-bold rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center shadow-md">
+          {unlockNumber}
+        </div>
+      )}
+      
+      <div className={`w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 ${color} rounded-lg flex items-center justify-center mb-2 sm:mb-3 ${
+        isLocked ? 'grayscale' : ''
+      }`}>
+        <Icon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-white" />
+      </div>
+      <span className="text-xs sm:text-sm font-medium text-gray-700 text-center leading-tight">{name}</span>
+      
+      {isLocked && unlockText && (
+        <span className="mt-1 text-[10px] sm:text-xs text-orange-600 font-medium text-center">
+          {unlockText}
+        </span>
+      )}
+    </button>
+  );
+};
+
+interface StudentDashboardProps {
+  activeSection?: string;
+}
+
+export default function StudentDashboard({ activeSection = 'dashboard' }: StudentDashboardProps) {
+  const { user } = useAuth();
+  
+  // State declarations (already correct - keep as is)
+  const [stats, setStats] = useState<StudentStats | null>(null);
+  const [skillProgress, setSkillProgress] = useState<SkillProgress[]>([]);
+  const [recentAchievements, setRecentAchievements] = useState<Achievement[]>([]);
+  const [dailyMissions, setDailyMissions] = useState<DailyMission[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<StudyCalendarEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [tutoringResources, setTutoringResources] = useState<TutoringResource[]>([]);
+  const [studentLevel, setStudentLevel] = useState<StudentLevel | null>(null);
+  
+  // NEW: Phase 2 state
+  const [certificates, setCertificates] = useState<StudentCertificate[]>([]);
+  const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlan[]>([]);
+  const [currentSubscription, setCurrentSubscription] = useState<SubscriptionPlan | null>(null);
+  const [badgeProgress, setBadgeProgress] = useState<BadgeProgress[]>([]);
+  const [mlmNetwork, setMlmNetwork] = useState<MLMNetwork | null>(null);
+  const [commissions, setCommissions] = useState<MLMCommission[]>([]);
+  const [payoutRequests, setPayoutRequests] = useState<PayoutRequest[]>([]);
+  const [downlineMembers, setDownlineMembers] = useState<DownlineMember[]>([]);
+  const [earningsBreakdown, setEarningsBreakdown] = useState({
+    totalEarnings: 0,
+    availableBalance: 0,
+    pendingBalance: 0,
+    withdrawnTotal: 0
+  });
+
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [uploadData, setUploadData] = useState({
+    title: '',
+    description: '',
+    price: '',
+    category: 'ebook',
+    permissions: {
+      downloadable: true,
+      printable: false,
+      shareable: false,
+      expiryDays: 0
+    }
+  });
+  const [products, setProducts] = useState<MarketplaceProduct[]>([]);
+  const [marketplaceLoading, setMarketplaceLoading] = useState(true);
+  const [marketplaceError, setMarketplaceError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<ProductCategory | 'all'>('all');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | 'all'>('all');
+  const [showFilters, setShowFilters] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
+
+  // NEW: Course selection state
+  const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
+  const [showCourseDashboard, setShowCourseDashboard] = useState(false);
+
+  // NEW: LMS State
+  const [selectedCourseForLMS, setSelectedCourseForLMS] = useState<string | null>(null);
+  const [lmsActiveTab, setLmsActiveTab] = useState<string>('assignments');
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [discussions, setDiscussions] = useState<CourseDiscussion[]>([]);
+  const [quizzes, setQuizzes] = useState<QuizTemplate[]>([]);
+  const [grades, setGrades] = useState<GradeRecord[]>([]);
+  const [gradeSummary, setGradeSummary] = useState<any>(null);
+  const [syllabus, setSyllabus] = useState<CourseSyllabus[]>([]);
+  const [attendance, setAttendance] = useState<CourseAttendance[]>([]);
+  const [attendanceStats, setAttendanceStats] = useState<AttendanceStats | null>(null);
+  const [outcomes, setOutcomes] = useState<CourseOutcome[]>([]);
+  const [outcomeProgress, setOutcomeProgress] = useState<StudentOutcomeProgress[]>([]);
+  const [courseFiles, setCourseFiles] = useState<CourseFile[]>([]);
+  const [coursePeople, setCoursePeople] = useState<CoursePerson[]>([]);
+  const [courseAnalytics, setCourseAnalytics] = useState<CourseAnalytics | null>(null);
+  const [lmsLoading, setLmsLoading] = useState(false);
+  const [lmsError, setLmsError] = useState<string | null>(null);
+
+  // NEW: Study Room State
+  const [studyRooms, setStudyRooms] = useState<any[]>([]);
+  const [selectedRoom, setSelectedRoom] = useState<any>(null);
+  const [roomParticipants, setRoomParticipants] = useState<any[]>([]);
+  const [studyRoomLoading, setStudyRoomLoading] = useState(false);
+
+  // Settings-related state
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordData, setPasswordData] = useState({ current: '', new: '', confirm: '' });
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [notificationSettings, setNotificationSettings] = useState({
+    email: true,
+    push: true,
+    weeklyReports: true,
+    communityUpdates: true
+  });
+
+  // NEW: Streak animation state
+  const [showStreakAnimation, setShowStreakAnimation] = useState(false);
+  const [hasShownStreakToday, setHasShownStreakToday] = useState(false);
+
+  // NEW: State to store actual course mappings from database
+  const [realCourseIds, setRealCourseIds] = useState<Map<string, string>>(new Map());
+
+  // Events section state
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newEvent, setNewEvent] = useState({
+    title: '',
+    description: '',
+    startTime: '',
+    endTime: '',
+    eventType: 'workshop',
+    isPublic: false
+  });
+  const [eventsError, setEventsError] = useState<string | null>(null);
+
+  // Community section state
+  const [posts, setPosts] = useState<CommunityPost[]>([]);
+  const [newPostContent, setNewPostContent] = useState('');
+  const [isPosting, setIsPosting] = useState(false);
+  const [communityError, setCommunityError] = useState<string | null>(null);
+
+  // Panel state
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [panelContent, setPanelContent] = useState<{ title: string; component: React.ReactNode } | null>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [activeCourses, setActiveCourses] = useState<any[]>([]);
+
+  // NEW: Right sidebar state for course details
+  const [showCourseDetailsSidebar, setShowCourseDetailsSidebar] = useState(false);
+  const [selectedCourseDetails, setSelectedCourseDetails] = useState<CourseOption | null>(null);
+
+  // NEW: Mission for Tomorrow modal state
+  const [showAddMissionModal, setShowAddMissionModal] = useState(false);
+  const [newMissionData, setNewMissionData] = useState({
+    title: '',
+    description: '',
+    category: 'education',
+    difficulty: 'medium' as 'easy' | 'medium' | 'hard',
+    deadlineHours: 24
+  });
+  const [isCreatingMission, setIsCreatingMission] = useState(false);
+  const [missionError, setMissionError] = useState<string | null>(null);
+
+  // NEW: Stat card modal state
+  const [showStatCardModal, setShowStatCardModal] = useState(false);
+  const [selectedStatCard, setSelectedStatCard] = useState<StatCardType | null>(null);
+
+  // Helper functions for panel
+  const openPanel = (title: string, component: React.ReactNode) => {
+    setPanelContent({ title, component });
+    setIsPanelOpen(true);
+  };
+
+  const closePanel = () => {
+    setIsPanelOpen(false);
+    setPanelContent(null);
+  };
+
+  // Helper functions for loading data
+  const loadEvents = async () => {
+    if (!user?.id) return;
+    try {
+      const eventsData = await calendarEventsService.getUpcomingEvents(user.id, currentDate);
+      setEvents(eventsData);
+    } catch (err: any) {
+      console.error('Error loading events:', err);
+      setEventsError(err.message);
+    }
+  };
+
+  const loadPosts = async () => {
+    if (!user?.id) return;
+    try {
+      const postsData = await communityService.getApprovedPosts(20);
+      setPosts(postsData);
+    } catch (err: any) {
+      console.error('Error loading posts:', err);
+      setCommunityError(err.message);
+    }
+  };
+
+  // Load profile and courses
+  useEffect(() => {
+    if (user?.id) {
+      setProfile({
+        full_name: user.email?.split('@')[0] || 'User',
+        email: user.email,
+        role: user.role || 'student'
+      });
+
+      setActiveCourses([
+        {
+          id: '1',
+          title: 'Amharic Language',
+          description: 'Learn Amharic from basics to advanced',
+          progress: 45,
+          image_url: '/api/placeholder/400/200'
+        },
+        {
+          id: '2',
+          title: 'Mathematics',
+          description: 'Master mathematical concepts',
+          progress: 60,
+          image_url: '/api/placeholder/400/200'
+        }
+      ]);
+    }
+  }, [user?.id]);
+
+  // Load actual course IDs from database
+  useEffect(() => {
+    const loadRealCourseIds = async () => {
+      try {
+        const availableCourses = await courseContentService.getAvailableCourses();
+        const idMap = new Map<string, string>();
+        
+        availableCourses.forEach(course => {
+          idMap.set(course.type, course.id);
+        });
+        
+        setRealCourseIds(idMap);
+      } catch (err: any) {
+        console.error('Error loading course IDs:', err);
+      }
+    };
+
+    loadRealCourseIds();
+  }, []);
+
+  // Load dashboard data
+  useEffect(() => {
+    if (!user?.id) return;
+
+    let isMounted = true;
+
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const [
+          statsData, 
+          skillsData, 
+          achievementsData, 
+          missionsData, 
+          calendarData, 
+          resourcesData, 
+          levelData,
+          certificatesData,
+          subscriptionPlansData,
+          currentSubData,
+          badgeProgressData,
+          mlmNetworkData,
+          commissionsData,
+          payoutsData,
+          downlineData,
+          earningsData
+        ] = await Promise.all([
+          studentDashboardService.getStudentStats(user.id),
+          studentDashboardService.getSkillProgress(user.id),
+          studentDashboardService.getRecentAchievements(user.id, 3),
+          studentDashboardService.getDailyMissions(user.id),
+          studentDashboardService.getStudyCalendar(user.id, 35),
+          resourceUnlockService.getTutoringResources(),
+          resourceUnlockService.getStudentLevel(user.id),
+          certificateService.getStudentCertificates(user.id),
+          subscriptionService.getSubscriptionPlans(),
+          subscriptionService.getCurrentSubscription(user.id),
+          gamificationService.getStudentBadgeProgress(user.id),
+          mlmEarnersService.getNetworkStats(user.id),
+          mlmEarnersService.getCommissions(user.id, 10),
+          mlmEarnersService.getPayoutRequests(user.id),
+          mlmEarnersService.getDownlineMembers(user.id),
+          mlmEarnersService.getEarningsBreakdown(user.id)
+        ]);
+
+        if (isMounted) {
+          setStats(statsData);
+          setSkillProgress(skillsData);
+          setRecentAchievements(achievementsData);
+          setDailyMissions(missionsData);
+          setCalendarEvents(calendarData);
+          setTutoringResources(resourcesData);
+          setStudentLevel(levelData);
+          setCertificates(certificatesData);
+          setSubscriptionPlans(subscriptionPlansData);
+          setCurrentSubscription(currentSubData);
+          setBadgeProgress(badgeProgressData);
+          setMlmNetwork(mlmNetworkData);
+          setCommissions(commissionsData);
+          setPayoutRequests(payoutsData);
+          setDownlineMembers(downlineData);
+          setEarningsBreakdown(earningsData);
+
+          const today = new Date().toDateString();
+          const lastShownDate = localStorage.getItem('lastStreakAnimationDate');
+          
+          if (lastShownDate !== today && statsData?.currentStreak > 0) {
+            setTimeout(() => {
+              setShowStreakAnimation(true);
+              localStorage.setItem('lastStreakAnimationDate', today);
+            }, 800);
+          }
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          console.error('Error loading dashboard data:', err);
+          setError(err.message || 'Failed to load dashboard data');
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadDashboardData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
+
+  // Load marketplace products
+  useEffect(() => {
+    if (activeSection === 'marketplace') {
+      loadMarketplaceProducts();
+    }
+  }, [activeSection, selectedCategory, selectedPaymentMethod]);
+
+  // Load LMS data when course is selected
+  useEffect(() => {
+    if (selectedCourseForLMS && user?.id && activeSection === 'lms') {
+      loadLMSData();
+    }
+  }, [selectedCourseForLMS, user?.id, lmsActiveTab, activeSection]);
+
+  // Load study rooms when section is active
+  useEffect(() => {
+    if (activeSection === 'study-rooms' && user?.id) {
+      loadStudyRooms();
+    }
+  }, [activeSection, user?.id]);
+
+  const loadMarketplaceProducts = async () => {
+    try {
+      setMarketplaceLoading(true);
+      setMarketplaceError(null);
+
+      const filters: any = {};
+      if (selectedCategory !== 'all') filters.category = selectedCategory;
+      if (selectedPaymentMethod !== 'all') filters.paymentMethod = selectedPaymentMethod;
+      if (searchTerm) filters.searchTerm = searchTerm;
+
+      const data = await marketplaceService.getActiveProducts(filters);
+      setProducts(data);
+    } catch (err: any) {
+      console.error('Error loading products:', err);
+      setMarketplaceError(err.message || 'Failed to load marketplace products');
+    } finally {
+      setMarketplaceLoading(false);
+    }
+  };
+
+  const handleSearch = () => {
+    loadMarketplaceProducts();
+  };
+
+  const handlePurchase = async (productId: string, paymentMethod: PaymentMethod) => {
+    if (!user) {
+      alert('Please login to purchase');
+      return;
+    }
+
+    try {
+      await marketplaceService.purchaseProduct(productId, paymentMethod);
+      alert('Purchase successful!');
+      setCartCount(prev => prev + 1);
+    } catch (err: any) {
+      alert(err.message || 'Purchase failed');
+    }
+  };
+
+  const handleMissionStart = async (missionId: string) => {
+    if (!user?.id) return;
+    
+    try {
+      // Show loading state for this specific mission
+      setDailyMissions(prev => prev.map(m => 
+        m.id === missionId ? { ...m, isProcessing: true } : m
+      ));
+
+      await studentDashboardService.completeMission(user.id, missionId);
+      
+      // Reload all dashboard data to reflect XP changes
+      const [updatedMissions, updatedStats] = await Promise.all([
+        studentDashboardService.getDailyMissions(user.id),
+        studentDashboardService.getStudentStats(user.id)
+      ]);
+      
+      setDailyMissions(updatedMissions);
+      setStats(updatedStats);
+      
+      // Show success message
+      alert('Quest completed! XP has been added to your total.');
+    } catch (err: any) {
+      console.error('Error completing mission:', err);
+      alert(err.message || 'Failed to complete mission');
+      
+      // Remove loading state on error
+      setDailyMissions(prev => prev.map(m => 
+        m.id === missionId ? { ...m, isProcessing: false } : m
+      ));
+    }
+  };
+
+  const getCalendarDayActivity = (dayOffset: number): boolean => {
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() - (35 - dayOffset - 1));
+    const dateStr = targetDate.toISOString().split('T')[0];
+    
+    return calendarEvents.some(event => event.date === dateStr && event.minutesStudied > 0);
+  };
+
+  const getResourceIcon = (resourceName: string): React.ElementType => {
+    const iconMap: Record<string, React.ElementType> = {
+      'Books': BookMarked,
+      'Videos': Play,
+      'Audio': Headphones,
+      'Music': Music,
+      'Games': Gamepad2,
+      'Audiobooks': BookAudio,
+      'Vocabulary': Type,
+      'Notes': FileText,
+      'Exercises': Dumbbell,
+      'Novels': BookCopy,
+      'Movies': Film,
+      'Live Classes': Gamepad2
+    };
+    return iconMap[resourceName] || BookMarked;
+  };
+
+  // MODIFIED: Handle course card click - Open right sidebar instead of full view
+  const handleCourseSelect = (courseType: string) => {
+    const course = courseOptions.find(c => c.type === courseType);
+    if (course) {
+      setSelectedCourseDetails(course);
+      setShowCourseDetailsSidebar(true);
+    }
+  };
+
+  // NEW: Close course details sidebar
+  const handleCloseCourseDetails = () => {
+    setShowCourseDetailsSidebar(false);
+    setSelectedCourseDetails(null);
+  };
+
+  // NEW: Handle stat card click
+  const handleStatCardClick = (cardType: StatCardType) => {
+    setSelectedStatCard(cardType);
+    setShowStatCardModal(true);
+  };
+
+  // NEW: Close stat card modal
+  const handleCloseStatModal = () => {
+    setShowStatCardModal(false);
+    setSelectedStatCard(null);
+  };
+
+  // NEW: Load LMS data when course is selected
+  useEffect(() => {
+    if (selectedCourseForLMS && user?.id && activeSection === 'lms') {
+      loadLMSData();
+    }
+  }, [selectedCourseForLMS, user?.id, lmsActiveTab, activeSection]);
+
+  // NEW: Load study rooms when section is active
+  useEffect(() => {
+    if (activeSection === 'study-rooms' && user?.id) {
+      loadStudyRooms();
+    }
+  }, [activeSection, user?.id]);
+
+  const loadLMSData = async () => {
+    if (!selectedCourseForLMS || !user?.id) return;
+
+    try {
+      setLmsLoading(true);
+      setLmsError(null);
+
+      // Load data based on active tab
+      switch (lmsActiveTab) {
+        case 'assignments':
+          const assignmentsData = await lmsService.getCourseAssignments(selectedCourseForLMS, user.id);
+          setAssignments(assignmentsData);
+          break;
+        case 'grades':
+          const gradesData = await lmsService.getStudentGrades(user.id, selectedCourseForLMS);
+          const summaryData = await lmsService.getCourseGradeSummary(user.id, selectedCourseForLMS);
+          setGrades(gradesData);
+          setGradeSummary(summaryData);
+          break;
+        case 'discussions':
+          const discussionsData = await lmsService.getCourseDiscussions(selectedCourseForLMS);
+          setDiscussions(discussionsData);
+          break;
+        case 'quizzes':
+          const quizzesData = await lmsService.getCourseQuizzes(selectedCourseForLMS, user.id);
+          setQuizzes(quizzesData);
+          break;
+        case 'attendance':
+          const attendanceData = await lmsService.getStudentAttendance(user.id, selectedCourseForLMS);
+          const statsData = await lmsService.getAttendanceStats(user.id, selectedCourseForLMS);
+          setAttendance(attendanceData);
+          setAttendanceStats(statsData);
+          break;
+        case 'syllabus':
+          const syllabusData = await lmsService.getCourseSyllabus(selectedCourseForLMS);
+          setSyllabus(syllabusData);
+          break;
+        case 'files':
+          const filesData = await lmsService.getCourseFiles(selectedCourseForLMS);
+          setCourseFiles(filesData);
+          break;
+        case 'people':
+          const peopleData = await lmsService.getCoursePeople(selectedCourseForLMS);
+          setCoursePeople(peopleData);
+          break;
+        case 'analytics':
+          const analyticsData = await lmsService.getCourseAnalytics(user.id, selectedCourseForLMS);
+          const outcomesData = await lmsService.getCourseOutcomes(selectedCourseForLMS);
+          const progressData = await lmsService.getStudentOutcomeProgress(user.id, selectedCourseForLMS);
+          setCourseAnalytics(analyticsData);
+          setOutcomes(outcomesData);
+          setOutcomeProgress(progressData);
+          break;
+      }
+    } catch (error: any) {
+      console.error('Error loading LMS data:', error);
+      setLmsError(error.message || 'Failed to load LMS data');
+    } finally {
+      setLmsLoading(false);
+    }
+  };
+
+  const loadStudyRooms = async () => {
+    if (!user?.id) return;
+
+    try {
+      setStudyRoomLoading(true);
+      const rooms = await studyRoomService.getAvailableRooms(user.id);
+      setStudyRooms(rooms);
+    } catch (error: any) {
+      console.error('Error loading study rooms:', error);
+    } finally {
+      setStudyRoomLoading(false);
+    }
+  };
+
+  // NEW: Handle creating custom mission for tomorrow
+  const handleCreateMission = async () => {
+    if (!user?.id || !newMissionData.title.trim() || !newMissionData.description.trim()) {
+      setMissionError('Please fill in all required fields');
+      return;
+    }
+
+    // FIX: Enforce 7 quest limit (1 life progress + 6 class/AI missions)
+    if (dailyMissions.length >= 7) {
+      setMissionError('Quest limit reached! You can have maximum 7 quests (1 from Life Progress + 6 from classes/AI). Complete or remove existing quests first.');
+      return;
+    }
+
+    try {
+      setIsCreatingMission(true);
+      setMissionError(null);
+
+      await studentDashboardService.createCustomMission(user.id, newMissionData);
+
+      // FIX: Reload missions to show the new one immediately
+      const updatedMissions = await studentDashboardService.getDailyMissions(user.id);
+      setDailyMissions(updatedMissions);
+
+      // Reset form and close modal
+      setNewMissionData({
+        title: '',
+        description: '',
+        category: 'education',
+        difficulty: 'medium',
+        deadlineHours: 24
+      });
+      setShowAddMissionModal(false);
+
+      // FIX: Show success notification popup
+      alert('✅ Mission created for tomorrow! Your quest will appear in "Today\'s Quest" section tomorrow with AI-calculated XP based on complexity.');
+    } catch (err: any) {
+      console.error('Error creating mission:', err);
+      setMissionError(err.message || 'Failed to create mission');
+    } finally {
+      setIsCreatingMission(false);
+    }
+  };
+
+  // MODIFIED: renderDashboardSection - Move streak inside Welcome Card
+  const renderDashboardSection = () => {
+    // Format today's date
+    const formatTodayDate = () => {
+      const today = new Date();
+      return today.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+    };
+
+    return (
+      <div className="space-y-4 sm:space-y-6 pb-6 sm:pb-8 bg-gradient-to-br from-gray-50 via-orange-50 to-white min-h-screen p-3 sm:p-4 md:p-6 max-w-full overflow-x-hidden">
+        {/* FIX: Welcome Header with Date AND Streak integrated */}
+        <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            {/* Left side: Welcome text */}
+            <div className="flex-1">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+                Welcome back, Student! 👋
+              </h1>
+              <p className="text-sm sm:text-base text-gray-600">
+                {formatTodayDate()}
+              </p>
+            </div>
+
+            {/* Right side: Streak element with animation */}
+            <button
+              onClick={() => setShowStreakAnimation(true)}
+              className="flex-shrink-0 bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border-2 border-orange-300 hover:shadow-lg transition-all cursor-pointer group"
+            >
+              <div className="flex items-center gap-3">
+                <Zap className="w-6 h-6 sm:w-8 sm:h-8 text-orange-500 group-hover:animate-pulse" />
+                <div className="text-left">
+                  <p className="text-xs sm:text-sm font-medium text-gray-700">Current Streak</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-orange-600">
+                    {stats?.currentStreak || 7} 🔥
+                  </p>
+                </div>
+              </div>
+              <p className="text-[10px] sm:text-xs text-orange-600 mt-2 text-center">Click to celebrate!</p>
+            </button>
+          </div>
+        </div>
+
+        {/* Stats Grid - Keep as is */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+          {/* Total Lessons Card - NOW CLICKABLE */}
+          <button
+            onClick={() => handleStatCardClick('lessons')}
+            className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-blue-300 hover:shadow-lg hover:border-blue-400 transition-all cursor-pointer text-left"
+          >
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <BookOpen className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500" />
+              <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                {stats?.totalLessons || 3}
+              </span>
+            </div>
+            <p className="text-gray-700 font-medium text-sm sm:text-base">Total Lessons</p>
+            <p className="text-xs text-blue-600 mt-1">Click to view details</p>
+          </button>
+
+          {/* Total Badges Card - NOW CLICKABLE */}
+          <button
+            onClick={() => handleStatCardClick('badges')}
+            className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-purple-300 hover:shadow-lg hover:border-purple-400 transition-all cursor-pointer text-left"
+          >
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <Award className="w-6 h-6 sm:w-8 sm:h-8 text-purple-500" />
+              <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                {badgeProgress.filter(b => b.isUnlocked).length || 2}
+              </span>
+            </div>
+            <p className="text-gray-700 font-medium text-sm sm:text-base">Total Badges</p>
+            <p className="text-xs text-purple-600 mt-1">Click to view collection</p>
+          </button>
+
+          {/* Total XP Card - NOW CLICKABLE */}
+          <button
+            onClick={() => handleStatCardClick('xp')}
+            className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-yellow-300 hover:shadow-lg hover:border-yellow-400 transition-all cursor-pointer text-left"
+          >
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <Trophy className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-500" />
+              <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                {stats?.totalXP || 7410}
+              </span>
+            </div>
+            <p className="text-gray-700 font-medium text-sm sm:text-base">Total XP</p>
+            <p className="text-xs text-yellow-600 mt-1">Click to view activity</p>
+          </button>
+
+          {/* Total Certificates Card - NOW CLICKABLE */}
+          <button
+            onClick={() => handleStatCardClick('certificates')}
+            className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-orange-300 hover:shadow-lg hover:border-orange-400 transition-all cursor-pointer text-left"
+          >
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <Award className="w-6 h-6 sm:w-8 sm:h-8 text-orange-500" />
+              <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                {certificates.length || 0}
+              </span>
+            </div>
+            <p className="text-gray-700 font-medium text-sm sm:text-base">Total Certs</p>
+            <p className="text-xs text-orange-600 mt-1">Click to view certificates</p>
+          </button>
+        </div>
+
+        {/* FIX: Today's Quest Section - Show quest limit warning */}
+        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg text-white">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <Target className="w-6 h-6 sm:w-7 sm:h-7" />
+              <h2 className="text-xl sm:text-2xl font-bold">Today's Quest</h2>
+              <span className="px-2 py-1 bg-white/20 text-white rounded-full text-xs font-medium">
+                {(dailyMissions || []).length}/7
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                if ((dailyMissions || []).length >= 7) {
+                  alert('Quest limit reached! Maximum 7 quests allowed (1 Life Progress + 6 class/AI). Complete existing quests first.');
+                } else {
+                  setShowAddMissionModal(true);
+                }
+              }}
+              disabled={(dailyMissions || []).length >= 7}
+              className={`px-3 sm:px-4 py-2 rounded-lg transition-colors flex items-center gap-2 text-xs sm:text-sm font-medium ${
+                (dailyMissions || []).length >= 7
+                  ? 'bg-white/30 text-white/60 cursor-not-allowed' :'bg-white text-orange-600 hover:bg-orange-50'
+              }`}
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Add Mission for Tomorrow</span>
+              <span className="sm:hidden">Add Mission</span>
+            </button>
+          </div>
+          
+          {(dailyMissions || []).length >= 7 && (
+            <div className="mb-3 p-2 bg-yellow-400 text-yellow-900 rounded-lg text-xs sm:text-sm font-medium flex items-center gap-2">
+              <span>⚠️</span>
+              <span>Quest limit reached! Complete or remove existing quests to add more.</span>
+            </div>
+          )}
+          
+          <div className="space-y-3">
+            {(dailyMissions || []).length > 0 ? (
+              (dailyMissions || []).map((mission) => (
+                <div 
+                  key={mission.id}
+                  className="bg-white/10 backdrop-blur-sm rounded-lg p-4 hover:bg-white/20 transition-all cursor-pointer border border-white/20"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <h3 className="font-bold text-white">{mission.title}</h3>
+                        {mission.isSuggestion && (
+                          <span className="px-2 py-0.5 bg-yellow-400 text-yellow-900 rounded-full text-xs font-medium">
+                            AI Suggested
+                          </span>
+                        )}
+                        {mission.category && (
+                          <span className="px-2 py-0.5 bg-white/20 text-white rounded-full text-xs font-medium capitalize">
+                            {mission.category}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-white/90">{mission.description}</p>
+                    </div>
+                    <div className="ml-3 px-3 py-1 bg-yellow-400 text-yellow-900 rounded-full text-xs font-bold flex items-center gap-1 flex-shrink-0">
+                      <Star className="w-3 h-3" />
+                      +{mission.xpReward} XP
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-xs text-white/80">
+                      {mission.isCompleted 
+                        ? '✓ Completed' 
+                        : `⏰ ${mission.deadlineHours}h remaining`}
+                    </span>
+                    {mission.isCompleted ? (
+                      <button
+                        disabled
+                        className="px-4 py-1.5 bg-green-500 text-white rounded-lg cursor-not-allowed text-sm font-medium flex items-center gap-2"
+                      >
+                        <Check className="w-4 h-4" />
+                        Done
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleMissionStart(mission.id)}
+                        disabled={mission.isProcessing}
+                        className="px-4 py-1.5 bg-white text-orange-600 rounded-lg hover:bg-orange-50 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {mission.isProcessing ? 'Processing...' : 'Start Quest'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 text-center">
+                <Target className="w-12 h-12 text-white/60 mx-auto mb-3" />
+                <p className="text-white/90">No quests available today</p>
+                <p className="text-sm text-white/70 mt-1">Click "Add Mission for Tomorrow" to create your own!</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* MODIFIED: Grading System - Replacing Language Skills Progress */}
+        <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
+          <div className="flex items-center space-x-2 sm:space-x-3 mb-4 sm:mb-6">
+            <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500" />
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">Grading System</h2>
+          </div>
+          
+          {/* Grading Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+            {/* Assignments Card */}
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 sm:p-6 shadow-sm border-2 border-blue-200 hover:shadow-lg transition-all">
+              <div className="flex items-center justify-between mb-3">
+                <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
+                <span className="text-2xl sm:text-3xl font-bold text-blue-900">A</span>
+              </div>
+              <h3 className="font-bold text-gray-900 mb-1 text-sm sm:text-base">Assignments</h3>
+              <p className="text-xs sm:text-sm text-blue-700">Grade: 92%</p>
+              <div className="mt-3 w-full bg-blue-200 rounded-full h-2">
+                <div className="bg-blue-600 h-2 rounded-full" style={{ width: '92%' }}></div>
+              </div>
+            </div>
+
+            {/* Notes Card */}
+            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 sm:p-6 shadow-sm border-2 border-green-200 hover:shadow-lg transition-all">
+              <div className="flex items-center justify-between mb-3">
+                <BookCopy className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
+                <span className="text-2xl sm:text-3xl font-bold text-green-900">B+</span>
+              </div>
+              <h3 className="font-bold text-gray-900 mb-1 text-sm sm:text-base">Notes</h3>
+              <p className="text-xs sm:text-sm text-green-700">Grade: 87%</p>
+              <div className="mt-3 w-full bg-green-200 rounded-full h-2">
+                <div className="bg-green-600 h-2 rounded-full" style={{ width: '87%' }}></div>
+              </div>
+            </div>
+
+            {/* Quizzes Card */}
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 sm:p-6 shadow-sm border-2 border-purple-200 hover:shadow-lg transition-all">
+              <div className="flex items-center justify-between mb-3">
+                <Trophy className="w-6 h-6 sm:w-8 sm:h-8 text-purple-600" />
+                <span className="text-2xl sm:text-3xl font-bold text-purple-900">A-</span>
+              </div>
+              <h3 className="font-bold text-gray-900 mb-1 text-sm sm:text-base">Quizzes</h3>
+              <p className="text-xs sm:text-sm text-purple-700">Grade: 90%</p>
+              <div className="mt-3 w-full bg-purple-200 rounded-full h-2">
+                <div className="bg-purple-600 h-2 rounded-full" style={{ width: '90%' }}></div>
+              </div>
+            </div>
+
+            {/* Projects Card */}
+            <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 sm:p-6 shadow-sm border-2 border-orange-200 hover:shadow-lg transition-all">
+              <div className="flex items-center justify-between mb-3">
+                <Target className="w-6 h-6 sm:w-8 sm:h-8 text-orange-600" />
+                <span className="text-2xl sm:text-3xl font-bold text-orange-900">B</span>
+              </div>
+              <h3 className="font-bold text-gray-900 mb-1 text-sm sm:text-base">Projects</h3>
+              <p className="text-xs sm:text-sm text-orange-700">Grade: 85%</p>
+              <div className="mt-3 w-full bg-orange-200 rounded-full h-2">
+                <div className="bg-orange-600 h-2 rounded-full" style={{ width: '85%' }}></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Overall Grade Summary */}
+          <div className="mt-4 sm:mt-6 p-4 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl border-2 border-yellow-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Overall Course Grade</p>
+                <h3 className="text-2xl sm:text-3xl font-bold text-gray-900">88.5%</h3>
+              </div>
+              <div className="text-right">
+                <span className="text-3xl sm:text-4xl font-bold text-yellow-600">B+</span>
+                <p className="text-xs text-gray-600 mt-1">Above Average</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Achievements */}
+        <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
+          <div className="flex items-center space-x-2 sm:space-x-3 mb-4 sm:mb-6">
+            <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-500" />
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">Recent Achievements</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+            {(recentAchievements || []).length > 0 ? (
+              (recentAchievements || []).map((achievement) => (
+                <div key={achievement.id} className="flex items-start space-x-3 sm:space-x-4 p-3 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg sm:rounded-xl hover:shadow-md transition-shadow border border-orange-100">
+                  <div className="text-xl sm:text-2xl flex-shrink-0">{achievement.icon}</div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-gray-900 text-sm sm:text-base">{achievement.title}</h3>
+                    <p className="text-xs sm:text-sm text-gray-700 line-clamp-2">{achievement.description}</p>
+                    <p className="text-xs text-gray-600 mt-1">{achievement.earnedAt}</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-600 text-center py-6 sm:py-8 col-span-full text-sm sm:text-base">No achievements yet - keep learning!</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // MODIFIED: renderProgressSection - Course selection moved here (was previously called "Quest")
+  const renderProgressSection = () => {
+    return (
+      <div className="space-y-4 sm:space-y-6 pb-6 sm:pb-8 bg-gradient-to-br from-gray-50 via-orange-50 to-white min-h-screen p-3 sm:p-4 md:p-6 max-w-full overflow-x-hidden">
+        {/* Course Selection Section */}
+        <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
+          <div className="mb-4 sm:mb-6">
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mb-2">Choose Your Learning Path</h2>
+            <p className="text-sm sm:text-base text-gray-600">Select a course to access specialized learning resources</p>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
+            {courseOptions.map((course) => (
+              <CourseSelectionCard
+                key={course.id}
+                course={course}
+                onSelect={handleCourseSelect}
+                isSelected={selectedCourseDetails?.type === course.type}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Teacher Feedback Section */}
+        <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
+          <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 mb-3 sm:mb-4">
+            <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
+            Teacher Feedback & Notes
+          </h3>
+          <div className="space-y-2 sm:space-y-3">
+            <div className="bg-blue-50 border-l-4 border-blue-500 p-3 sm:p-4 rounded">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-semibold text-gray-900 text-sm">Speaking Practice</span>
+                <span className="text-xs text-gray-600">2 days ago</span>
+              </div>
+              <p className="text-xs sm:text-sm text-gray-700">Great improvement in pronunciation! Continue practicing daily conversations.</p>
+            </div>
+            <div className="bg-green-50 border-l-4 border-green-500 p-3 sm:p-4 rounded">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-semibold text-gray-900 text-sm">Writing Exercise</span>
+                <span className="text-xs text-gray-600">1 week ago</span>
+              </div>
+              <p className="text-xs sm:text-sm text-gray-700">Excellent grammar usage. Focus more on complex sentence structures for next level.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // NEW: Enhanced renderEarnersSection with real MLM data
+  const renderEarnersSection = () => {
+    return (
+      <div className="space-y-6 pb-8 max-w-full overflow-x-hidden">
+        {/* Total Earnings Card - Now with real data */}
+        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <p className="text-green-100 text-sm mb-1">Total Earnings</p>
+              <h2 className="text-4xl font-bold">
+                ${earningsBreakdown.totalEarnings.toFixed(2)}
+              </h2>
+            </div>
+            <DollarSign className="w-12 h-12 text-green-200" />
+          </div>
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
+              <p className="text-green-100 text-xs mb-1">Available</p>
+              <p className="text-xl font-bold">
+                ${earningsBreakdown.availableBalance.toFixed(2)}
+              </p>
+            </div>
+            <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
+              <p className="text-green-100 text-xs mb-1">Pending</p>
+              <p className="text-xl font-bold">
+                ${earningsBreakdown.pendingBalance.toFixed(2)}
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            <button className="bg-white text-green-600 rounded-lg py-2 px-3 text-sm font-medium hover:bg-green-50 transition-colors">
+              Top Up
+            </button>
+            <button className="bg-white text-green-600 rounded-lg py-2 px-3 text-sm font-medium hover:bg-green-50 transition-colors">
+              Earn
+            </button>
+            <button className="bg-white text-green-600 rounded-lg py-2 px-3 text-sm font-medium hover:bg-green-50 transition-colors">
+              Scan
+            </button>
+            <button className="bg-white text-green-600 rounded-lg py-2 px-3 text-sm font-medium hover:bg-green-50 transition-colors">
+              Request
+            </button>
+          </div>
+        </div>
+
+        {/* Money Making Machine - Now with real MLM stats */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Share2 className="w-6 h-6 text-purple-600" />
+              Money Making Machine
+            </h3>
+          </div>
+          <div className="bg-purple-50 rounded-lg p-4 mb-4">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Your Referral Link</label>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                value={`https://liqlearns.com/ref/${user?.id?.substring(0, 8)}`}
+                readOnly 
+                className="flex-1 px-3 py-2 border border-purple-200 rounded-lg bg-white text-sm"
+              />
+              <button 
+                onClick={() => navigator.clipboard.writeText(`https://liqlearns.com/ref/${user?.id?.substring(0, 8)}`)}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+              >
+                <Link2 className="w-4 h-4" />
+                Copy
+              </button>
+            </div>
+          </div>
+          {mlmNetwork && (
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center p-4 bg-gray-50 rounded-lg">
+                <p className="text-2xl font-bold text-gray-900">
+                  {mlmNetwork.totalDownline}
+                </p>
+                <p className="text-xs text-gray-600 mt-1">Total Downline</p>
+              </div>
+              <div className="text-center p-4 bg-blue-50 rounded-lg">
+                <p className="text-2xl font-bold text-blue-600">
+                  {mlmNetwork.activeDownline}
+                </p>
+                <p className="text-xs text-gray-600 mt-1">Active Members</p>
+              </div>
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <p className="text-2xl font-bold text-green-600">
+                  ${mlmNetwork.monthlyEarnings.toFixed(2)}
+                </p>
+                <p className="text-xs text-gray-600 mt-1">Monthly Earnings</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Referral Earnings Breakdown - Now with real commission data */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <h3 className="text-xl font-bold text-gray-900 mb-6">Recent Commissions</h3>
+          <div className="space-y-3">
+            {(commissions || []).length > 0 ? (
+              (commissions || []).slice(0, 5).map((commission) => (
+                <div key={commission.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {commission.description || commission.commissionType.replace('_', ' ')}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {new Date(commission.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-green-600">
+                      +${commission.amount.toFixed(2)}
+                    </p>
+                    {commission.percentage && (
+                      <span className="text-xs text-gray-500">
+                        {commission.percentage}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <DollarSign className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-600">No commissions yet</p>
+                <p className="text-sm text-gray-500 mt-2">Start referring to earn commissions!</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Network Genealogy - Now with real downline data */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+            <Users className="w-6 h-6 text-indigo-600" />
+            Network Genealogy ({(downlineMembers || []).length} members)
+          </h3>
+          {(downlineMembers || []).length > 0 ? (
+            <div className="space-y-3">
+              {(downlineMembers || []).slice(0, 5).map((member) => (
+                <div key={member.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                      <Users className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {member.fullName || member.email}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Level {member.level} • {member.rank}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-gray-900">
+                      ${member.totalEarnings.toFixed(2)}
+                    </p>
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      member.isActive 
+                        ? 'bg-green-100 text-green-700' :'bg-gray-100 text-gray-600'
+                    }`}>
+                      {member.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-600">No downline members yet</p>
+              <p className="text-sm text-gray-500 mt-2">Share your referral link to build your network!</p>
+            </div>
+          )}
+        </div>
+
+        {/* NEW: Withdrawal Methods */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <h3 className="text-xl font-bold text-gray-900 mb-6">Withdrawal Methods</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button className="p-4 border-2 border-gray-200 rounded-xl hover:border-green-500 hover:bg-green-50 transition-all">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                  <DollarSign className="w-6 h-6 text-green-600" />
+                </div>
+                <div className="text-left">
+                  <p className="font-medium text-gray-900">Bank Transfer</p>
+                  <p className="text-xs text-gray-600">Min: $50.00</p>
+                </div>
+              </div>
+            </button>
+            <button className="p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <DollarSign className="w-6 h-6 text-blue-600" />
+                </div>
+                <div className="text-left">
+                  <p className="font-medium text-gray-900">PayPal</p>
+                  <p className="text-xs text-gray-600">Min: $20.00</p>
+                </div>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* Earnings Progress */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <h3 className="text-xl font-bold text-gray-900 mb-6">Earning Progress</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 border border-gray-200 rounded-lg">
+              <p className="text-sm text-gray-600 mb-2">Daily Average</p>
+              <p className="text-2xl font-bold text-gray-900">$35.50</p>
+              <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                <TrendingUp className="w-3 h-3" />
+                +12% from last week
+              </p>
+            </div>
+            <div className="p-4 border border-gray-200 rounded-lg">
+              <p className="text-sm text-gray-600 mb-2">Weekly Average</p>
+              <p className="text-2xl font-bold text-gray-900">$248.50</p>
+              <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                <TrendingUp className="w-3 h-3" />
+                +8% from last month
+              </p>
+            </div>
+            <div className="p-4 border border-gray-200 rounded-lg">
+              <p className="text-sm text-gray-600 mb-2">Monthly Average</p>
+              <p className="text-2xl font-bold text-gray-900">$1,072.00</p>
+              <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                <TrendingUp className="w-3 h-3" />
+                +15% from last quarter
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Activity */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <h3 className="text-xl font-bold text-gray-900 mb-6">Recent Activity</h3>
+          <div className="space-y-3">
+            {[
+              { type: 'earn', amount: '+$25.00', desc: 'Referral bonus from John D.', time: '2 hours ago' },
+              { type: 'withdraw', amount: '-$100.00', desc: 'Withdrawal to bank account', time: '1 day ago' },
+              { type: 'earn', amount: '+$15.50', desc: 'Commission from course sale', time: '2 days ago' }
+            ].map((activity, idx) => (
+              <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    activity.type === 'earn' ? 'bg-green-100' : 'bg-red-100'
+                  }`}>
+                    <DollarSign className={`w-5 h-5 ${
+                      activity.type === 'earn' ? 'text-green-600' : 'text-red-600'
+                    }`} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{activity.desc}</p>
+                    <p className="text-xs text-gray-500">{activity.time}</p>
+                  </div>
+                </div>
+                <span className={`font-bold ${
+                  activity.type === 'earn' ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  {activity.amount}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderEventsSection = () => {
+    const handlePrevMonth = () => {
+      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    };
+
+    const handleNextMonth = () => {
+      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+    };
+
+    const handleCreateEvent = async () => {
+      if (!user?.id || !newEvent.title || !newEvent.startTime || !newEvent.endTime) {
+        alert('Please fill in all required fields');
+        return;
+      }
+
+      try {
+        await calendarEventsService.createEvent({
+          hostId: user.id,
+          title: newEvent.title,
+          description: newEvent.description,
+          startTime: newEvent.startTime,
+          endTime: newEvent.endTime,
+          isPublic: newEvent.isPublic,
+          eventType: newEvent.eventType
+        });
+
+        setShowCreateModal(false);
+        setNewEvent({
+          title: '',
+          description: '',
+          startTime: '',
+          endTime: '',
+          eventType: 'workshop',
+          isPublic: false
+        });
+        
+        alert(newEvent.isPublic 
+          ? 'Event created! It will appear after CEO approval.' : 'Event created successfully!');
+        
+        await loadEvents();
+      } catch (err: any) {
+        console.error('Error creating event:', err);
+        alert(err.message || 'Failed to create event');
+      }
+    };
+
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+
+    return (
+      <div className="space-y-4 sm:space-y-6 pb-6 sm:pb-8 p-3 sm:p-4 md:p-6 max-w-full overflow-x-hidden">
+        <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600" />
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900">Events Calendar</h2>
+            </div>
+            <button 
+              onClick={() => setShowCreateModal(true)}
+              className="px-3 sm:px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2 text-xs sm:text-sm font-medium w-full sm:w-auto justify-center"
+            >
+              <Plus className="w-4 h-4" />
+              Create Event
+            </button>
+          </div>
+
+          {eventsError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+              {eventsError}
+            </div>
+          )}
+
+          {/* Calendar View - NOW WITH WORKING NAVIGATION */}
+          <div className="mb-4 sm:mb-6">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <button 
+                onClick={handlePrevMonth}
+                className="px-2 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                ← Prev
+              </button>
+              <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-900">
+                {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+              </h3>
+              <button 
+                onClick={handleNextMonth}
+                className="px-2 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Next →
+              </button>
+            </div>
+            <div className="grid grid-cols-7 gap-0.5 sm:gap-1 mb-1 sm:mb-2">
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => (
+                <div key={idx} className="text-center text-xs sm:text-sm font-semibold text-gray-600 p-1 sm:p-2">
+                  <span className="hidden sm:inline">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][idx]}</span>
+                  <span className="sm:hidden">{day}</span>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
+              {Array.from({ length: 35 }, (_, i) => {
+                const dayNumber = i + 1;
+                const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), dayNumber);
+                const hasEvent = events.some(event => {
+                  const eventDate = new Date(event.startTime);
+                  return eventDate.getDate() === dayNumber && 
+                         eventDate.getMonth() === currentDate.getMonth() &&
+                         eventDate.getFullYear() === currentDate.getFullYear();
+                });
+                const isToday = dayDate.toDateString() === new Date().toDateString();
+                
+                return (
+                  <div
+                    key={i}
+                    className={`min-h-[40px] sm:min-h-[60px] md:min-h-[80px] p-1 sm:p-2 border rounded transition-all cursor-pointer ${
+                      isToday 
+                        ? 'bg-orange-500 border-orange-600 text-white' 
+                        : hasEvent 
+                        ? 'bg-blue-50 border-blue-200 hover:bg-blue-100' :'border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className={`text-xs sm:text-sm font-medium ${isToday ? 'text-white' : 'text-gray-900'}`}>
+                      {dayNumber <= new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate() ? dayNumber : ''}
+                    </span>
+                    {hasEvent && (
+                      <div className="mt-0.5 sm:mt-1 hidden sm:block">
+                        <div className="text-[8px] sm:text-xs bg-blue-500 text-white rounded px-0.5 sm:px-1 py-0.5 truncate">
+                          Event
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Upcoming Events List - NOW WITH REAL DATA */}
+          <div>
+            <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-3 sm:mb-4">Upcoming Events</h3>
+            <div className="space-y-2 sm:space-y-3">
+              {(events || []).length === 0 ? (
+                <div className="text-center py-8">
+                  <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-600">No events scheduled for this month</p>
+                </div>
+              ) : (
+                (events || []).map((event) => (
+                  <div 
+                    key={event.id} 
+                    className="p-3 sm:p-4 border border-gray-200 rounded-lg sm:rounded-xl hover:shadow-md transition-all cursor-pointer bg-gradient-to-r from-gray-50 to-white"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <span className={`px-2 py-0.5 sm:py-1 rounded text-xs font-medium bg-blue-100 text-blue-700 capitalize`}>
+                            {event.eventType}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {event.participantCount} participants
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-gray-900 mb-1 text-sm sm:text-base">{event.title}</h4>
+                        <p className="text-xs sm:text-sm text-gray-600 mb-2">{event.description}</p>
+                        <p className="text-xs sm:text-sm text-gray-600 flex items-center gap-2 mb-2">
+                          <Calendar className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                          <span className="truncate">
+                            {new Date(event.startTime).toLocaleString()} - {new Date(event.endTime).toLocaleTimeString()}
+                          </span>
+                        </p>
+                        <p className="text-xs text-gray-500">Hosted by: {event.hostName}</p>
+                      </div>
+                      <button className="px-3 py-1.5 sm:py-1 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-xs sm:text-sm font-medium w-full sm:w-auto whitespace-nowrap">
+                        Join Event
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Create Event Modal */}
+        {showCreateModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-gray-900">Create New Event</h3>
+                <button 
+                  onClick={() => setShowCreateModal(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Event Title *</label>
+                  <input
+                    type="text"
+                    value={newEvent.title}
+                    onChange={(e) => setNewEvent({...newEvent, title: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                    placeholder="e.g., Amharic Cultural Workshop"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                  <textarea
+                    value={newEvent.description}
+                    onChange={(e) => setNewEvent({...newEvent, description: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 resize-none"
+                    rows={3}
+                    placeholder="Describe your event..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Start Time *</label>
+                    <input
+                      type="datetime-local"
+                      value={newEvent.startTime}
+                      onChange={(e) => setNewEvent({...newEvent, startTime: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">End Time *</label>
+                    <input
+                      type="datetime-local"
+                      value={newEvent.endTime}
+                      onChange={(e) => setNewEvent({...newEvent, endTime: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Event Type</label>
+                  <select
+                    value={newEvent.eventType}
+                    onChange={(e) => setNewEvent({...newEvent, eventType: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                  >
+                    <option value="workshop">Workshop</option>
+                    <option value="cultural">Cultural</option>
+                    <option value="study">Study</option>
+                    <option value="competition">Competition</option>
+                    <option value="celebration">Celebration</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={newEvent.isPublic}
+                    onChange={(e) => setNewEvent({...newEvent, isPublic: e.target.checked})}
+                    className="w-5 h-5 text-orange-500 rounded"
+                  />
+                  <label className="text-sm text-gray-700">
+                    Make event public (requires CEO approval)
+                  </label>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={handleCreateEvent}
+                    className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium"
+                  >
+                    Create Event
+                  </button>
+                  <button
+                    onClick={() => setShowCreateModal(false)}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderStoreSection = () => {
+    return (
+      <div className="space-y-6 pb-8 bg-gradient-to-br from-gray-50 via-orange-50 to-white min-h-screen p-6 max-w-full overflow-x-hidden">
+        {/* My Storefront Overview */}
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <p className="text-purple-100 text-sm mb-1">My Storefront</p>
+              <h2 className="text-3xl font-bold">Active</h2>
+            </div>
+            <Package className="w-12 h-12 text-purple-200" />
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
+              <p className="text-purple-100 text-xs mb-1">Total Products</p>
+              <p className="text-2xl font-bold">12</p>
+            </div>
+            <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
+              <p className="text-purple-100 text-xs mb-1">Total Sales</p>
+              <p className="text-2xl font-bold">45</p>
+            </div>
+            <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
+              <p className="text-purple-100 text-xs mb-1">This Month</p>
+              <p className="text-2xl font-bold">$520</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Upload Material Tool */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Upload className="w-6 h-6 text-purple-600" />
+              Upload Material for Sale
+            </h3>
+            {!showUploadForm && (
+              <button 
+                onClick={() => setShowUploadForm(true)}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 text-sm font-medium"
+              >
+                <Plus className="w-4 h-4" />
+                New Material
+              </button>
+            )}
+          </div>
+
+          {showUploadForm ? (
+            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); /* Handle upload */ }}>
+              {/* Title */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Material Title *</label>
+                <input
+                  type="text"
+                  value={uploadData.title}
+                  onChange={(e) => setUploadData({...uploadData, title: e.target.value})}
+                  placeholder="e.g., Advanced Amharic Grammar Guide"
+                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 placeholder-gray-500"
+                  required
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
+                <textarea
+                  value={uploadData.description}
+                  onChange={(e) => setUploadData({...uploadData, description: e.target.value})}
+                  placeholder="Describe your material, what it covers, and who it's for..."
+                  className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 placeholder-gray-500 resize-none"
+                  rows={4}
+                  required
+                />
+              </div>
+
+              {/* Price and Category */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Price (USD) *</label>
+                  <input
+                    type="number"
+                    value={uploadData.price}
+                    onChange={(e) => setUploadData({...uploadData, price: e.target.value})}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 placeholder-gray-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+                  <select
+                    value={uploadData.category}
+                    onChange={(e) => setUploadData({...uploadData, category: e.target.value})}
+                    className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900"
+                  >
+                    <option value="ebook">E-Book</option>
+                    <option value="video">Video Course</option>
+                    <option value="audio">Audio Lesson</option>
+                    <option value="flashcards">Flashcards</option>
+                    <option value="worksheet">Worksheet</option>
+                    <option value="guide">Study Guide</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* File Upload */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Upload File *</label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-500 transition-colors bg-gray-50">
+                  <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-gray-700 mb-2">Click to upload or drag and drop</p>
+                  <p className="text-sm text-gray-500">PDF, DOCX, MP4, MP3 (max 100MB)</p>
+                  <input type="file" className="hidden" />
+                </div>
+              </div>
+
+              {/* Permissions */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">Permissions & Access</label>
+                <div className="space-y-3 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <span className="flex items-center gap-2 text-gray-700">
+                      <Check className="w-4 h-4" />
+                      Downloadable
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={uploadData.permissions.downloadable}
+                      onChange={(e) => setUploadData({
+                        ...uploadData,
+                        permissions: {...uploadData.permissions, downloadable: e.target.checked}
+                      })}
+                      className="w-5 h-5 text-purple-600 rounded"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <span className="flex items-center gap-2 text-gray-700">
+                      <FileText className="w-4 h-4" />
+                      Printable
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={uploadData.permissions.printable}
+                      onChange={(e) => setUploadData({
+                        ...uploadData,
+                        permissions: {...uploadData.permissions, printable: e.target.checked}
+                      })}
+                      className="w-5 h-5 text-purple-600 rounded"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <span className="flex items-center gap-2 text-gray-700">
+                      <Share2 className="w-4 h-4" />
+                      Shareable
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={uploadData.permissions.shareable}
+                      onChange={(e) => setUploadData({
+                        ...uploadData,
+                        permissions: {...uploadData.permissions, shareable: e.target.checked}
+                      })}
+                      className="w-5 h-5 text-purple-600 rounded"
+                    />
+                  </label>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-2">Access Expiry (days, 0 = unlimited)</label>
+                    <input
+                      type="number"
+                      value={uploadData.permissions.expiryDays}
+                      onChange={(e) => setUploadData({
+                        ...uploadData,
+                        permissions: {...uploadData.permissions, expiryDays: parseInt(e.target.value) || 0}
+                      })}
+                      min="0"
+                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-gray-900"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-3 pt-4">
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                >
+                  Upload & Publish
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowUploadForm(false)}
+                  className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <p className="text-gray-600 text-center py-8">
+              Click "New Material" to upload content for sale
+            </p>
+          )}
+        </div>
+
+        {/* Edit Products */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Edit3 className="w-6 h-6 text-purple-600" />
+              Manage Products
+            </h3>
+            <button className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 text-sm font-medium">
+              <Plus className="w-4 h-4" />
+              Add Product
+            </button>
+          </div>
+
+          {/* Product List */}
+          <div className="space-y-4">
+            {[
+              { name: 'Amharic Study Guide', price: '$29.99', inventory: 15, sales: 23 },
+              { name: 'Ethiopian Culture eBook', price: '$19.99', inventory: 8, sales: 12 },
+              { name: 'Language Flashcards Set', price: '$15.00', inventory: 20, sales: 10 }
+            ].map((product, idx) => (
+              <div key={idx} className="flex flex-col md:flex-row md:items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <div className="flex items-center gap-4 flex-1 min-w-0">
+                  <div className="w-16 h-16 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Package className="w-8 h-8 text-purple-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-bold text-gray-900 mb-1 truncate">{product.name}</h4>
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+                      <span>Price: <strong className="text-gray-900">{product.price}</strong></span>
+                      <span>Stock: <strong className="text-gray-900">{product.inventory}</strong></span>
+                      <span>Sales: <strong className="text-green-600">{product.sales}</strong></span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex md:flex-col gap-2 w-full md:w-auto">
+                  <button className="flex-1 md:flex-initial px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium text-gray-700 min-w-[80px]">
+                    Edit
+                  </button>
+                  <button className="flex-1 md:flex-initial px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium min-w-[80px]">
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Sales Analytics */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <h3 className="text-xl font-bold text-gray-900 mb-6">Sales Analytics</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+              <p className="text-sm text-gray-600 mb-2">Revenue</p>
+              <p className="text-2xl font-bold text-gray-900">$1,248</p>
+              <p className="text-xs text-green-600 mt-1">+18% this month</p>
+            </div>
+            <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+              <p className="text-sm text-gray-600 mb-2">Units Sold</p>
+              <p className="text-2xl font-bold text-gray-900">45</p>
+              <p className="text-xs text-green-600 mt-1">+12% this month</p>
+            </div>
+            <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+              <p className="text-sm text-gray-600 mb-2">Avg. Price</p>
+              <p className="text-2xl font-bold text-gray-900">$27.73</p>
+              <p className="text-xs text-gray-600 mt-1">Stable</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Reviews */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <h3 className="text-xl font-bold text-gray-900 mb-6">Recent Reviews</h3>
+          <div className="space-y-3">
+            {[
+              { user: 'Sarah M.', rating: 5, comment: 'Excellent study materials! Really helped me improve.', product: 'Amharic Study Guide' },
+              { user: 'John D.', rating: 4, comment: 'Good quality content, would recommend.', product: 'Ethiopian Culture eBook' }
+            ].map((review, idx) => (
+              <div key={idx} className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium text-gray-900">{review.user}</span>
+                  <div className="flex items-center gap-1">
+                    {Array(review.rating).fill(0).map((_, i) => (
+                      <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                    ))}
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600 mb-1">{review.comment}</p>
+                <p className="text-xs text-gray-500">Product: {review.product}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Recent Orders */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <h3 className="text-xl font-bold text-gray-900 mb-6">Recent Orders</h3>
+          <div className="space-y-3">
+            {[
+              { order: '#12345', customer: 'Michael T.', product: 'Language Flashcards Set', amount: '$15.00', status: 'Completed' },
+              { order: '#12344', customer: 'Emma W.', product: 'Amharic Study Guide', amount: '$29.99', status: 'Processing' }
+            ].map((order, idx) => (
+              <div key={idx} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <div>
+                  <p className="font-medium text-gray-900">{order.order}</p>
+                  <p className="text-sm text-gray-600">{order.customer} • {order.product}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-gray-900">{order.amount}</p>
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    order.status === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                  }`}>
+                    {order.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderMarketplaceSection = () => {
+    const categories = [
+      { value: 'all', label: 'All Categories' },
+      { value: 'ebook', label: 'E-Books' },
+      { value: 'video', label: 'Videos' },
+      { value: 'audio', label: 'Audio' },
+      { value: 'flashcards', label: 'Flashcards' },
+      { value: 'worksheet', label: 'Worksheets' },
+      { value: 'guide', label: 'Guides' },
+      { value: 'notes', label: 'Notes' }
+    ];
+
+    const studentProducts = (products || []).filter(p => p?.paymentMethod === 'aura_points');
+    const teacherProducts = (products || []).filter(p => p?.paymentMethod === 'usd');
+
+    if (marketplaceLoading) {
+      return (
+        <div className="space-y-4 sm:space-y-6 pb-6 sm:pb-8 bg-gradient-to-br from-gray-50 via-orange-50 to-white min-h-screen p-3 sm:p-4 md:p-6 max-w-full overflow-x-hidden flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-orange-500 mx-auto"></div>
+            <p className="mt-4 text-gray-600 text-sm sm:text-base">Loading marketplace...</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4 sm:space-y-6 pb-6 sm:pb-8 bg-gradient-to-br from-gray-50 via-orange-50 to-white min-h-screen p-3 sm:p-4 md:p-6 max-w-full overflow-x-hidden">
+        {/* Header - Mobile Optimized */}
+        <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
+                <Package className="w-6 h-6 sm:w-8 sm:h-8 text-orange-500" />
+                Marketplace Hub
+              </h1>
+              <p className="text-gray-600 mt-1 text-xs sm:text-sm md:text-base">Discover educational materials</p>
+            </div>
+            <button className="relative p-2 sm:p-3 bg-orange-500 text-white rounded-full hover:bg-orange-600 transition-colors">
+              <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {cartCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Search and Filters - Mobile Optimized */}
+          <div className="flex flex-col gap-2 sm:gap-3">
+            <div className="flex gap-2">
+              <div className="flex-1 relative">
+                <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
+                <input
+                  type="text"
+                  placeholder="Search materials..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                  className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white text-sm sm:text-base"
+                />
+              </div>
+              <button
+                onClick={handleSearch}
+                className="px-4 sm:px-6 py-2 sm:py-3 bg-orange-500 text-white rounded-lg sm:rounded-xl hover:bg-orange-600 transition-colors font-medium text-sm sm:text-base whitespace-nowrap"
+              >
+                Search
+              </button>
+            </div>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="w-full px-4 sm:px-6 py-2 sm:py-3 border-2 border-orange-500 text-orange-600 rounded-lg sm:rounded-xl hover:bg-orange-50 transition-colors font-medium flex items-center justify-center gap-2 text-sm sm:text-base"
+            >
+              <Filter className="w-4 h-4 sm:w-5 sm:h-5" />
+              Filters
+            </button>
+          </div>
+
+          {/* Filters Panel - Mobile Optimized */}
+          {showFilters && (
+            <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gray-50 rounded-lg sm:rounded-xl border border-gray-200">
+              <div className="grid grid-cols-1 gap-3 sm:gap-4">
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Category</label>
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value as ProductCategory | 'all')}
+                    className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-sm sm:text-base"
+                  >
+                    {categories.map(cat => (
+                      <option key={cat.value} value={cat.value}>{cat.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Payment Method</label>
+                  <select
+                    value={selectedPaymentMethod}
+                    onChange={(e) => setSelectedPaymentMethod(e.target.value as PaymentMethod | 'all')}
+                    className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-sm sm:text-base"
+                  >
+                    <option value="all">All Payment Methods</option>
+                    <option value="aura_points">Aura Points (Students)</option>
+                    <option value="usd">USD (Teachers)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {marketplaceError && (
+          <div className="p-3 sm:p-4 bg-red-50 border border-red-200 rounded-lg sm:rounded-xl text-red-600 text-sm sm:text-base">
+            {marketplaceError}
+          </div>
+        )}
+
+        {/* Student Marketplace Section - Mobile Optimized */}
+        <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <Award className="w-5 h-5 sm:w-6 sm:h-6 text-purple-500" />
+              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">Student Marketplace</h2>
+              <span className="px-2 sm:px-3 py-0.5 sm:py-1 bg-purple-100 text-purple-700 rounded-full text-xs sm:text-sm font-medium">
+                Aura Points
+              </span>
+            </div>
+            <p className="text-gray-600 text-xs sm:text-sm">{studentProducts.length} items</p>
+          </div>
+
+          {studentProducts.length === 0 ? (
+            <div className="text-center py-8 sm:py-12">
+              <Package className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-600 text-sm sm:text-base">No student products available</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
+              {studentProducts.map((product) => (
+                <div key={product.id} className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all">
+                  {product.previewImageUrl && (
+                    <div className="h-36 sm:h-40 md:h-48 bg-gray-200 relative">
+                      <img src={product.previewImageUrl} alt={product.title} className="w-full h-full object-cover" />
+                      <div className="absolute top-2 right-2 bg-purple-500 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-medium flex items-center gap-1">
+                        <Award className="w-3 h-3 sm:w-4 sm:h-4" />
+                        {product.price}
+                      </div>
+                    </div>
+                  )}
+                  <div className="p-3 sm:p-4 md:p-5">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-gray-900 mb-1 line-clamp-2 text-sm sm:text-base">{product.title}</h3>
+                        <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">{product.description}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 sm:gap-4 mb-2 sm:mb-3 text-xs sm:text-sm text-gray-600">
+                      <span className="flex items-center gap-1">
+                        <Star className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-500 fill-yellow-500" />
+                        {product.ratingAverage.toFixed(1)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
+                        {product.totalSales}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 sm:gap-4 mb-3 sm:mb-4">
+                      <span className="text-xs text-gray-500">by</span>
+                      <span className="text-xs sm:text-sm font-medium text-gray-900 truncate">{product.sellerName}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handlePurchase(product.id, 'aura_points')}
+                        className="flex-1 px-3 sm:px-4 py-1.5 sm:py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-medium text-xs sm:text-sm"
+                      >
+                        Purchase
+                      </button>
+                      <button className="p-1.5 sm:p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                        <Eye className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                      </button>
+                      <button className="p-1.5 sm:p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                        <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                      </button>
+                    </div>
+
+                    {product.downloadsAllowed && (
+                      <div className="mt-2 sm:mt-3 flex items-center gap-2 text-xs text-gray-500">
+                        <Download className="w-3 h-3" />
+                        Downloadable
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Teacher Marketplace Section - Same mobile optimizations */}
+        <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <DollarSign className="w-5 h-5 sm:w-6 sm:h-6 text-green-500" />
+              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">Teacher Premium</h2>
+              <span className="px-2 sm:px-3 py-0.5 sm:py-1 bg-green-100 text-green-700 rounded-full text-xs sm:text-sm font-medium">
+                USD
+              </span>
+            </div>
+            <p className="text-gray-600 text-xs sm:text-sm">{teacherProducts.length} items</p>
+          </div>
+
+          {teacherProducts.length === 0 ? (
+            <div className="text-center py-8 sm:py-12">
+              <Package className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-600 text-sm sm:text-base">No teacher products available</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
+              {teacherProducts.map((product) => (
+                <div key={product.id} className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all">
+                  {product.previewImageUrl && (
+                    <div className="h-36 sm:h-40 md:h-48 bg-gray-200 relative">
+                      <img src={product.previewImageUrl} alt={product.title} className="w-full h-full object-cover" />
+                      <div className="absolute top-2 right-2 bg-green-500 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-medium flex items-center gap-1">
+                        <DollarSign className="w-3 h-3 sm:w-4 sm:h-4" />
+                        ${product.price}
+                      </div>
+                    </div>
+                  )}
+                  <div className="p-3 sm:p-4 md:p-5">
+                    <div className="flex items-start justify-between mb-2 sm:mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-gray-900 mb-1 line-clamp-2 text-sm sm:text-base">{product.title}</h3>
+                        <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">{product.description}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 sm:gap-4 mb-2 sm:mb-3 text-xs sm:text-sm text-gray-600">
+                      <span className="flex items-center gap-1">
+                        <Star className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-500 fill-yellow-500" />
+                        {product.ratingAverage.toFixed(1)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
+                        {product.totalSales}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
+                      <span className="text-xs text-gray-500">by</span>
+                      <span className="text-xs sm:text-sm font-medium text-gray-900 truncate">{product.sellerName}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handlePurchase(product.id, 'usd')}
+                        className="flex-1 px-3 sm:px-4 py-1.5 sm:py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium text-xs sm:text-sm"
+                      >
+                        Purchase
+                      </button>
+                      <button className="p-1.5 sm:p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                        <Eye className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                      </button>
+                      <button className="p-1.5 sm:p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                        <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                      </button>
+                    </div>
+
+                    {product.downloadsAllowed && (
+                      <div className="mt-2 sm:mt-3 flex items-center gap-2 text-xs text-gray-500">
+                        <Download className="w-3 h-3" />
+                        Downloadable
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderCommunitySection = () => {
+    const handleCreatePost = async () => {
+      if (!newPostContent.trim() || !user?.id) return;
+
+      try {
+        setIsPosting(true);
+        setCommunityError(null);
+        
+        await communityService.createPost(user.id, newPostContent);
+        setNewPostContent('');
+        alert('Post submitted! It will appear after CEO approval.');
+        
+        await loadPosts();
+      } catch (err: any) {
+        console.error('Error creating post:', err);
+        setCommunityError(err.message);
+      } finally {
+        setIsPosting(false);
+      }
+    };
+
+    const handleLikePost = async (postId: string) => {
+      if (!user?.id) return;
+      
+      try {
+        await communityService.likePost(postId, user.id);
+        await loadPosts();
+      } catch (err: any) {
+        console.error('Error liking post:', err);
+      }
+    };
+
+    return (
+      <div className="space-y-6 pb-8 bg-gradient-to-br from-gray-50 via-orange-50 to-white min-h-screen p-6 max-w-full overflow-x-hidden">
+        {/* Group Chats */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <MessageSquare className="w-6 h-6 text-blue-500" />
+              Group Chats
+            </h3>
+            <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2 text-sm font-medium">
+              <Plus className="w-4 h-4" />
+              Create Group
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[
+              { name: 'Amharic Learners', members: 124, messages: 45, active: true },
+              { name: 'Cultural Exchange', members: 89, messages: 23, active: true },
+              { name: 'Study Together', members: 56, messages: 12, active: false }
+            ].map((group, idx) => (
+              <div key={idx} className="p-4 border border-gray-200 bg-gray-50 rounded-xl hover:shadow-md transition-all cursor-pointer">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-bold text-gray-900">{group.name}</h4>
+                  {group.active && (
+                    <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  )}
+                </div>
+                <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <span className="flex items-center gap-1">
+                    <Users className="w-4 h-4" />
+                    {group.members}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <MessageSquare className="w-4 h-4" />
+                    {group.messages} new
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Community Wall - UPDATED WITH WORKING POST FUNCTIONALITY */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-bold text-gray-900">Community Wall</h3>
+            <div className="flex items-center gap-2">
+              <button className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                <Search className="w-5 h-5 text-gray-600" />
+              </button>
+              <button className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                <Filter className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+          </div>
+
+          {communityError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+              {communityError}
+            </div>
+          )}
+
+          {/* Create Post - NOW WORKING */}
+          <div className="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+            <textarea 
+              value={newPostContent}
+              onChange={(e) => setNewPostContent(e.target.value)}
+              placeholder="Share something with the community..." 
+              className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+              rows={3}
+            />
+            <div className="flex items-center justify-between mt-2">
+              <p className="text-xs text-gray-500">
+                Posts require CEO approval before appearing
+              </p>
+              <button 
+                onClick={handleCreatePost}
+                disabled={!newPostContent.trim() || isPosting}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isPosting ? 'Posting...' : 'Post'}
+              </button>
+            </div>
+          </div>
+
+          {/* Posts Feed - NOW WITH REAL DATA */}
+          <div className="space-y-4">
+            {(posts || []).length === 0 ? (
+              <div className="text-center py-8">
+                <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-600">No posts yet. Be the first to share!</p>
+              </div>
+            ) : (
+              (posts || []).map((post) => (
+                <div key={post.id} className="p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
+                      {post.userAvatar}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <p className="font-bold text-gray-900">{post.userFullName}</p>
+                          <p className="text-xs text-gray-600">
+                            {new Date(post.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-gray-800 mb-3">{post.content}</p>
+                      <div className="flex items-center gap-4">
+                        <button 
+                          onClick={() => handleLikePost(post.id)}
+                          className="flex items-center gap-1 text-sm text-gray-700 hover:text-blue-600 transition-colors"
+                        >
+                          <Trophy className="w-4 h-4" />
+                          {post.likeCount} Likes
+                        </button>
+                        <button className="flex items-center gap-1 text-sm text-gray-700 hover:text-blue-600 transition-colors">
+                          <MessageSquare className="w-4 h-4" />
+                          {post.commentCount} Comments
+                        </button>
+                        <button className="flex items-center gap-1 text-sm text-gray-700 hover:text-blue-600 transition-colors">
+                          <Share2 className="w-4 h-4" />
+                          Share
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderSettingsSection = () => {
+    const handleChangePassword = async () => {
+      if (passwordData.new !== passwordData.confirm) {
+        alert('New passwords do not match');
+        return;
+      }
+      try {
+        setIsSavingSettings(true);
+        // Implement password change logic here
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+        alert('Password changed successfully!');
+        setPasswordData({ current: '', new: '', confirm: '' });
+        setIsChangingPassword(false);
+      } catch (error: any) {
+        alert(`Error changing password: ${error.message}`);
+      } finally {
+        setIsSavingSettings(false);
+      }
+    };
+
+    const handleDownloadData = async () => {
+      try {
+        setIsSavingSettings(true);
+        // Implement data download logic here
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+        alert('Your data download has been initiated. You will receive an email with the download link.');
+      } catch (error: any) {
+        alert(`Error downloading data: ${error.message}`);
+      } finally {
+        setIsSavingSettings(false);
+      }
+    };
+
+    const handleDeleteAccount = async () => {
+      const confirmed = window.confirm(
+        'Are you sure you want to delete your account? This action cannot be undone.'
+      );
+      if (!confirmed) return;
+
+      try {
+        setIsSavingSettings(true);
+        // Implement account deletion logic here
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+        alert('Account deletion request submitted. You will receive a confirmation email.');
+      } catch (error: any) {
+        alert(`Error deleting account: ${error.message}`);
+      } finally {
+        setIsSavingSettings(false);
+      }
+    };
+
+    const handleSaveNotificationSettings = async () => {
+      try {
+        setIsSavingSettings(true);
+        // Implement save notification settings logic here
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+        alert('Notification preferences saved successfully!');
+      } catch (error: any) {
+        alert(`Error saving preferences: ${error.message}`);
+      } finally {
+        setIsSavingSettings(false);
+      }
+    };
+
+    // NEW: Detect user's timezone using geolocation
+    const detectTimezone = () => {
+      try {
+        const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        return detectedTimezone;
+      } catch (error) {
+        console.error('Error detecting timezone:', error);
+        return 'UTC';
+      }
+    };
+
+    return (
+      <div className="space-y-4 sm:space-y-6 pb-6 sm:pb-8 bg-gradient-to-br from-gray-50 via-orange-50 to-white min-h-screen p-3 sm:p-4 md:p-6 max-w-full overflow-x-hidden">
+        {/* Profile Settings */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <h2 className="text-xl font-bold text-gray-900 mb-6">Profile Settings</h2>
+          
+          {/* Profile Picture */}
+          <div className="mb-6">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Profile Picture</label>
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 bg-orange-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                {user?.email?.charAt(0).toUpperCase() || 'U'}
+              </div>
+              <button className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm font-medium">
+                Change Picture
+              </button>
+            </div>
+          </div>
+
+          {/* Full Name */}
+          <div className="mb-6">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Full Name *</label>
+            <input 
+              type="text" 
+              defaultValue="" 
+              placeholder="Enter your full legal name"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
+            />
+            <p className="text-xs text-gray-500 mt-1">Your full legal name for official documents and certificates</p>
+          </div>
+
+          {/* NEW: Display Name */}
+          <div className="mb-6">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Display Name</label>
+            <input 
+              type="text" 
+              defaultValue="" 
+              placeholder="Enter your preferred display name"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
+            />
+            <p className="text-xs text-gray-500 mt-1">How you'd like to be addressed (can be different from your full name)</p>
+          </div>
+
+          {/* NEW: Sortable Name */}
+          <div className="mb-6">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Sortable Name</label>
+            <input 
+              type="text" 
+              defaultValue="" 
+              placeholder="Last, First (e.g., Smith, John)"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
+            />
+            <p className="text-xs text-gray-500 mt-1">Used for alphabetical sorting in rosters and lists</p>
+          </div>
+
+          {/* Username */}
+          <div className="mb-6">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Username</label>
+            <input 
+              type="text" 
+              defaultValue={user?.email?.split('@')[0] || ''} 
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
+            />
+          </div>
+
+          {/* Email */}
+          <div className="mb-6">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Email</label>
+            <input 
+              type="email" 
+              defaultValue={user?.email || ''} 
+              disabled
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
+            />
+          </div>
+
+          {/* NEW: Pronouns */}
+          <div className="mb-6">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Pronouns</label>
+            <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white">
+              <option value="">Prefer not to say</option>
+              <option value="he/him">he/him</option>
+              <option value="she/her">she/her</option>
+              <option value="they/them">they/them</option>
+              <option value="he/they">he/they</option>
+              <option value="she/they">she/they</option>
+              <option value="other">Other</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">Your preferred pronouns</p>
+          </div>
+
+          {/* NEW: Language - Enhanced with better description */}
+          <div className="mb-6">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Display Language</label>
+            <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white">
+              <option value="en">English</option>
+              <option value="am">አማርኛ (Amharic)</option>
+              <option value="es">Español (Spanish)</option>
+              <option value="fr">Français (French)</option>
+              <option value="ar">العربية (Arabic)</option>
+              <option value="zh">中文 (Chinese)</option>
+              <option value="hi">हिन्दी (Hindi)</option>
+              <option value="pt">Português (Portuguese)</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">Interface language for the application</p>
+          </div>
+
+          {/* NEW: Timezone with Geolocation */}
+          <div className="mb-6">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Timezone</label>
+            <div className="flex gap-2">
+              <select className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white">
+                <option value="">Select timezone...</option>
+                <optgroup label="Americas">
+                  <option value="America/New_York">Eastern Time (ET)</option>
+                  <option value="America/Chicago">Central Time (CT)</option>
+                  <option value="America/Denver">Mountain Time (MT)</option>
+                  <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                  <option value="America/Anchorage">Alaska Time (AKT)</option>
+                  <option value="America/Sao_Paulo">São Paulo</option>
+                  <option value="America/Mexico_City">Mexico City</option>
+                </optgroup>
+                <optgroup label="Europe">
+                  <option value="Europe/London">London (GMT)</option>
+                  <option value="Europe/Paris">Paris (CET)</option>
+                  <option value="Europe/Berlin">Berlin (CET)</option>
+                  <option value="Europe/Moscow">Moscow (MSK)</option>
+                </optgroup>
+                <optgroup label="Africa">
+                  <option value="Africa/Addis_Ababa">Addis Ababa (EAT)</option>
+                  <option value="Africa/Cairo">Cairo (EET)</option>
+                  <option value="Africa/Lagos">Lagos (WAT)</option>
+                  <option value="Africa/Johannesburg">Johannesburg (SAST)</option>
+                </optgroup>
+                <optgroup label="Asia">
+                  <option value="Asia/Dubai">Dubai (GST)</option>
+                  <option value="Asia/Kolkata">Kolkata (IST)</option>
+                  <option value="Asia/Shanghai">Shanghai (CST)</option>
+                  <option value="Asia/Tokyo">Tokyo (JST)</option>
+                  <option value="Asia/Seoul">Seoul (KST)</option>
+                </optgroup>
+                <optgroup label="Australia & Pacific">
+                  <option value="Australia/Sydney">Sydney (AEDT)</option>
+                  <option value="Australia/Melbourne">Melbourne (AEDT)</option>
+                  <option value="Pacific/Auckland">Auckland (NZDT)</option>
+                </optgroup>
+              </select>
+              <button 
+                onClick={() => {
+                  const timezone = detectTimezone();
+                  const select = document.querySelector('select[class*="flex-1"]') as HTMLSelectElement;
+                  if (select) {
+                    select.value = timezone;
+                  }
+                  alert(`Detected timezone: ${timezone}`);
+                }}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium whitespace-nowrap"
+              >
+                Auto-Detect
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Used for displaying dates and times. Click "Auto-Detect" to use your device's timezone</p>
+          </div>
+
+          {/* NEW: Sponsor/Referrer Display */}
+          <div className="mb-6">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Referred By</label>
+            <input 
+              type="text" 
+              defaultValue="john_doe" 
+              disabled
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
+            />
+            <p className="text-xs text-gray-500 mt-1">The person who referred you to LiqLearns</p>
+          </div>
+
+          {/* NEW: Privacy Settings */}
+          <div className="mb-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Privacy Settings</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg bg-white">
+                <div>
+                  <p className="font-medium text-gray-900">Show Profile in Leaderboard</p>
+                  <p className="text-sm text-gray-600">Let others see your progress</p>
+                </div>
+                <input type="checkbox" defaultChecked className="w-5 h-5 text-orange-500 rounded" />
+              </div>
+              <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg bg-white">
+                <div>
+                  <p className="font-medium text-gray-900">Allow Direct Messages</p>
+                  <p className="text-sm text-gray-600">Let students contact you</p>
+                </div>
+                <input type="checkbox" defaultChecked className="w-5 h-5 text-orange-500 rounded" />
+              </div>
+            </div>
+          </div>
+
+          {/* NEW: Language Preferences */}
+          <div className="mb-6">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Display Language</label>
+            <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white">
+              <option value="en">English</option>
+              <option value="am">አማርኛ (Amharic)</option>
+              <option value="es">Español</option>
+              <option value="fr">Français</option>
+            </select>
+          </div>
+
+          {/* NEW: Study Goals */}
+          <div className="mb-6">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Daily Study Goal (minutes)</label>
+            <input 
+              type="number" 
+              defaultValue="30" 
+              min="10"
+              max="300"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
+            />
+          </div>
+
+          {/* Learning Goals */}
+          <div className="mb-6">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Learning Goals</label>
+            <textarea 
+              placeholder="What do you want to achieve?"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
+              rows={4}
+            />
+          </div>
+
+          {/* Save Button */}
+          <button className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium">
+            Save Changes
+          </button>
+        </div>
+
+        {/* NEW: Subscription Management Section */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <h2 className="text-xl font-bold text-gray-900 mb-6">Subscription Management</h2>
+          
+          {currentSubscription ? (
+            <div className="mb-6 p-4 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-xl border-2 border-orange-200">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Current Plan</p>
+                  <h3 className="text-2xl font-bold text-gray-900">{currentSubscription.name}</h3>
+                </div>
+                <div className="px-4 py-2 bg-orange-500 text-white rounded-lg font-bold">
+                  Active
+                </div>
+              </div>
+              <div className="flex items-center gap-4 text-sm text-gray-700">
+                <span>${currentSubscription.priceMonthly}/month</span>
+                <span>or ${currentSubscription.priceYearly}/year</span>
+              </div>
+            </div>
+          ) : (
+            <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
+              <p className="text-gray-600 text-center">No active subscription</p>
+            </div>
+          )}
+
+          <h3 className="text-lg font-bold text-gray-900 mb-4">Available Plans</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {subscriptionPlans.map((plan) => (
+              <div 
+                key={plan.id} 
+                className={`p-5 rounded-xl border-2 transition-all cursor-pointer hover:shadow-lg ${
+                  currentSubscription?.id === plan.id
+                    ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-orange-300'
+                }`}
+              >
+                <h4 className="text-xl font-bold text-gray-900 mb-2">{plan.name}</h4>
+                <div className="mb-4">
+                  <p className="text-3xl font-bold text-gray-900">
+                    ${plan.priceMonthly}
+                    <span className="text-sm font-normal text-gray-600">/month</span>
+                  </p>
+                  <p className="text-sm text-gray-600 mt-1">
+                    or ${plan.priceYearly}/year
+                  </p>
+                </div>
+                <ul className="space-y-2 mb-4">
+                  {Object.entries(plan.features).map(([key, value]) => (
+                    <li key={key} className="flex items-start gap-2 text-sm text-gray-700">
+                      <Check className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                      <span>
+                        <strong className="capitalize">{key}:</strong> {value}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <button className={`w-full py-2 rounded-lg font-medium transition-colors ${
+                  currentSubscription?.id === plan.id
+                    ? 'bg-gray-200 text-gray-600 cursor-not-allowed' : 'bg-orange-500 text-white hover:bg-orange-600'
+                }`}>
+                  {currentSubscription?.id === plan.id ? 'Current Plan' : 'Upgrade'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* MODIFIED: Notification Preferences with SAVE BUTTON */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6">Notification Preferences</h2>
+          <div className="space-y-3 sm:space-y-4">
+            <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg bg-white">
+              <div>
+                <p className="font-medium text-gray-900 text-sm sm:text-base">Email Notifications</p>
+                <p className="text-xs sm:text-sm text-gray-600">Receive updates via email</p>
+              </div>
+              <input 
+                type="checkbox" 
+                checked={notificationSettings.email}
+                onChange={(e) => setNotificationSettings({...notificationSettings, email: e.target.checked})}
+                className="w-5 h-5 text-orange-500 rounded" 
+              />
+            </div>
+            <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg bg-white">
+              <div>
+                <p className="font-medium text-gray-900 text-sm sm:text-base">Push Notifications</p>
+                <p className="text-xs sm:text-sm text-gray-600">Get notifications on your device</p>
+              </div>
+              <input 
+                type="checkbox" 
+                checked={notificationSettings.push}
+                onChange={(e) => setNotificationSettings({...notificationSettings, push: e.target.checked})}
+                className="w-5 h-5 text-orange-500 rounded" 
+              />
+            </div>
+            <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg bg-white">
+              <div>
+                <p className="font-medium text-gray-900 text-sm sm:text-base">Weekly Progress Reports</p>
+                <p className="text-xs sm:text-sm text-gray-600">Weekly summary of your progress</p>
+              </div>
+              <input 
+                type="checkbox" 
+                checked={notificationSettings.weeklyReports}
+                onChange={(e) => setNotificationSettings({...notificationSettings, weeklyReports: e.target.checked})}
+                className="w-5 h-5 text-orange-500 rounded" 
+              />
+            </div>
+            <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg bg-white">
+              <div>
+                <p className="font-medium text-gray-900 text-sm sm:text-base">Community Updates</p>
+                <p className="text-xs sm:text-sm text-gray-600">Stay updated with community activities</p>
+              </div>
+              <input 
+                type="checkbox" 
+                checked={notificationSettings.communityUpdates}
+                onChange={(e) => setNotificationSettings({...notificationSettings, communityUpdates: e.target.checked})}
+                className="w-5 h-5 text-orange-500 rounded" 
+              />
+            </div>
+          </div>
+          <button 
+            onClick={handleSaveNotificationSettings}
+            disabled={isSavingSettings}
+            className="mt-4 sm:mt-6 px-4 sm:px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSavingSettings ? 'Saving...' : 'Save Preferences'}
+          </button>
+        </div>
+
+        {/* Security Settings */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <h2 className="text-xl font-bold text-gray-900 mb-6">Security</h2>
+          
+          {!isChangingPassword ? (
+            <button
+              onClick={() => setIsChangingPassword(true)}
+              className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium"
+            >
+              Change Password
+            </button>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Current Password</label>
+                <input
+                  type="password"
+                  value={passwordData.current}
+                  onChange={(e) => setPasswordData({...passwordData, current: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">New Password</label>
+                <input
+                  type="password"
+                  value={passwordData.new}
+                  onChange={(e) => setPasswordData({...passwordData, new: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Confirm New Password</label>
+                <input
+                  type="password"
+                  value={passwordData.confirm}
+                  onChange={(e) => setPasswordData({...passwordData, confirm: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleChangePassword}
+                  disabled={isSavingSettings}
+                  className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSavingSettings ? 'Updating...' : 'Update Password'}
+                </button>
+                <button
+                  onClick={() => {
+                    setIsChangingPassword(false);
+                    setPasswordData({ current: '', new: '', confirm: '' });
+                  }}
+                  className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Data & Privacy */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
+          <h2 className="text-xl font-bold text-gray-900 mb-6">Data & Privacy</h2>
+          
+          <div className="space-y-4">
+            <button
+              onClick={handleDownloadData}
+              disabled={isSavingSettings}
+              className="w-full px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium text-left flex items-center justify-between disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span>Download My Data</span>
+              <Download className="w-5 h-5" />
+            </button>
+            
+            <button
+              onClick={handleDeleteAccount}
+              disabled={isSavingSettings}
+              className="w-full px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium text-left disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Delete Account
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // NEW: Render LMS Section
+  const renderLMSSection = () => {
+    return (
+      <div className="space-y-6 pb-8 max-w-full overflow-x-hidden">
+        <VirtualClassroomHub 
+          userId={user?.id || ''}
+          userRole="student"
+        />
+      </div>
+    );
+  };
+
+  // NEW: Render Help Section
+  const renderHelpSection = () => {
+    return (
+      <div className="space-y-6 pb-8 bg-gradient-to-br from-gray-50 via-orange-50 to-white min-h-screen max-w-full overflow-x-hidden">
+        <HelpCenter userId={user?.id || ''} />
+      </div>
+    );
+  };
+
+  // NEW: Render Study Room section
+  const renderStudyRoomSection = () => {
+    return (
+      <div className="space-y-6 pb-8 bg-gradient-to-br from-gray-50 via-orange-50 to-white min-h-screen max-w-full overflow-x-hidden">
+        <StudyRoomHub userId={user?.id} />
+      </div>
+    );
+  };
+
+  // Main render logic
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 via-orange-50 to-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 via-orange-50 to-white p-4">
+        <div className="bg-white rounded-2xl p-8 shadow-lg border border-red-200 max-w-md w-full">
+          <div className="text-red-500 text-center mb-4">
+            <svg className="w-16 h-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 text-center mb-2">Oops! Something went wrong</h2>
+          <p className="text-gray-600 text-center mb-6">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="w-full px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium"
+          >
+            Reload Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-orange-50 to-white overflow-x-hidden max-w-full">
+      {/* Streak animation overlay */}
+      {showStreakAnimation && (
+        <StreakGiftAnimation onClose={() => setShowStreakAnimation(false)} />
+      )}
+
+      {/* Loading state */}
+      {loading && (
+        <div className="flex items-center justify-center min-h-screen">
+          <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+          <span className="ml-2 text-gray-600">Loading dashboard...</span>
+        </div>
+      )}
+
+      {/* Error state */}
+      {error && (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="bg-white p-8 rounded-lg shadow-lg text-center">
+            <p className="text-red-600 mb-4">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
+            >
+              Reload
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main content - render based on activeSection */}
+      {!loading && !error && (
+        <>
+          {activeSection === 'dashboard' && renderDashboardSection()}
+          {activeSection === 'progress' && renderProgressSection()}
+          {activeSection === 'earners' && renderEarnersSection()}
+          {activeSection === 'events' && renderEventsSection()}
+          {activeSection === 'store' && renderStoreSection()}
+          {activeSection === 'marketplace' && renderMarketplaceSection()}
+          {activeSection === 'community' && renderCommunitySection()}
+          {activeSection === 'settings' && renderSettingsSection()}
+          {activeSection === 'lms' && renderLMSSection()}
+          {activeSection === 'help' && renderHelpSection()}
+          {activeSection === 'study-rooms' && renderStudyRoomSection()}
+        </>
+      )}
+
+      {/* Course details sidebar modal */}
+      {showCourseDetailsSidebar && selectedCourseDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-end">
+          <div className="bg-white h-full w-full max-w-2xl overflow-y-auto">
+            <CourseContentView
+              course={selectedCourseDetails}
+              onClose={handleCloseCourseDetails}
+              realCourseId={realCourseIds.get(selectedCourseDetails.type) || ''}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Add Mission for Tomorrow modal */}
+      {showAddMissionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <Target className="w-6 h-6 text-orange-500" />
+                Create Mission for Tomorrow
+              </h3>
+              <button 
+                onClick={() => {
+                  setShowAddMissionModal(false);
+                  setMissionError(null);
+                }}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {missionError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+                {missionError}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {/* Mission Title */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Mission Title *
+                </label>
+                <input
+                  type="text"
+                  value={newMissionData.title}
+                  onChange={(e) => setNewMissionData({...newMissionData, title: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
+                  placeholder="e.g., Complete morning workout"
+                />
+              </div>
+
+              {/* Mission Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description *
+                </label>
+                <textarea
+                  value={newMissionData.description}
+                  onChange={(e) => setNewMissionData({...newMissionData, description: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white resize-none"
+                  rows={3}
+                  placeholder="Describe what you want to accomplish..."
+                />
+              </div>
+
+              {/* Category Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Life Category
+                </label>
+                <select
+                  value={newMissionData.category}
+                  onChange={(e) => setNewMissionData({...newMissionData, category: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white capitalize"
+                >
+                  <option value="spiritual">🙏 Spiritual</option>
+                  <option value="health">💪 Health</option>
+                  <option value="wealth">💰 Wealth</option>
+                  <option value="service">🤝 Service</option>
+                  <option value="education">📚 Education</option>
+                  <option value="family">👨‍👩‍👧 Family</option>
+                  <option value="social">🎉 Social</option>
+                </select>
+              </div>
+
+              {/* Difficulty Level */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Difficulty Level
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {(['easy', 'medium', 'hard'] as const).map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => setNewMissionData({...newMissionData, difficulty: level})}
+                      className={`px-4 py-2 rounded-lg font-medium transition-all capitalize ${
+                        newMissionData.difficulty === level
+                          ? 'bg-orange-500 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {level}
+                      <div className="text-xs mt-1">
+                        {level === 'easy' && '+50 XP'}
+                        {level === 'medium' && '+100 XP'}
+                        {level === 'hard' && '+200 XP'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Deadline Hours */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Deadline (hours from midnight tomorrow)
+                </label>
+                <input
+                  type="number"
+                  value={newMissionData.deadlineHours}
+                  onChange={(e) => setNewMissionData({...newMissionData, deadlineHours: parseInt(e.target.value) || 24})}
+                  min="1"
+                  max="24"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Mission will expire {newMissionData.deadlineHours} hours after tomorrow starts
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={handleCreateMission}
+                  disabled={isCreatingMission || !newMissionData.title.trim() || !newMissionData.description.trim()}
+                  className="flex-1 px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isCreatingMission ? 'Creating...' : 'Create Mission'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAddMissionModal(false);
+                    setMissionError(null);
+                  }}
+                  className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              {/* Info Box with XP calculation explanation */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-800">
+                  <strong>💡 AI XP Calculation:</strong> Your mission XP (10-50) will be automatically calculated based on complexity factors like description length, action keywords, and number of steps. The more complex your mission, the more XP you'll earn!
+                </p>
+                <p className="text-sm text-blue-800 mt-2">
+                  <strong>📅 Quest Limit:</strong> Maximum 7 quests allowed (1 from Life Progress + 6 from classes/AI missions).
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stat card details modal */}
+      {showStatCardModal && (
+        <StatCardModal
+          userId={user?.id || ''}
+          cardType={selectedStatCard}
+          onClose={handleCloseStatModal}
+        />
+      )}
+    </div>
+  );
+}

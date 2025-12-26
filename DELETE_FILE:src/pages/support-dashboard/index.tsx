@@ -1,0 +1,2 @@
+// This file should be deleted - it's a duplicate standalone page that shouldn't exist
+// All SupportDashboard functionality is properly embedded in src/pages/role-based-dashboard-hub/components/SupportDashboard.tsx
