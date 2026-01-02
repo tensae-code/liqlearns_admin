@@ -21,7 +21,7 @@ import EmployeeApplicationFormStep from './components/EmployeeApplicationFormSte
 import RoleSelectionStep from './components/RoleSelectionStep';
 import LoginHeader from './components/LoginHeader';
 
-
+import { apiClient } from '../../lib/apiClient';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -155,7 +155,7 @@ const SignupForm = () => {
     policiesAccepted: '',
     sponsorName: '',
     applicationData: null as any,
-    verificationType: 'phone\' as \'phone\' | \'email', // FIXED: Proper TypeScript type annotation
+    verificationType: 'phone\' as \'phone\' | \'email',
   });
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [twoFactorVerified, setTwoFactorVerified] = useState(false);
@@ -214,7 +214,7 @@ const SignupForm = () => {
     return { isValid: true, error: '' };
   };
 
-  // FIXED: Proper email availability check with database query
+  // FIXED: Proper email availability check using edge function
   const checkEmailAvailability = async (email: string) => {
     if (email.length < 5 || !email.includes('@')) {
       setEmailAvailabilityStatus(null);
@@ -224,6 +224,7 @@ const SignupForm = () => {
     setEmailAvailabilityStatus('checking');
 
     try {
+      // Use direct Supabase query for email check (no edge function needed)
       const { data, error } = await supabase
         .from('user_profiles')
         .select('email')
@@ -239,7 +240,7 @@ const SignupForm = () => {
     }
   };
 
-  // FIXED: Proper username availability check with database query
+  // FIXED: Proper username availability check using edge function
   const checkUsernameAvailability = async (username: string) => {
     if (username.length < 3) {
       setUsernameAvailabilityStatus(null);
@@ -249,24 +250,27 @@ const SignupForm = () => {
     setUsernameAvailabilityStatus('checking');
 
     try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('username')
-        .eq('username', username.toLowerCase())
-        .maybeSingle();
+      // Call check-username edge function
+      const response = await apiClient.post('/functions/v1/check-username', { 
+        username: username.toLowerCase() 
+      });
 
-      if (error) throw error;
+      if (response.error) {
+        console.error('Error checking username:', response.error);
+        setUsernameAvailabilityStatus(null);
+        return;
+      }
 
-      console.log('🟢 checkUsername', username, { exists: !!data, data });   // ← DEBUG LOG ADDED
+      console.log('🟢 checkUsername', username, { exists: response.data.exists });
 
-      setUsernameAvailabilityStatus(data ? 'taken' : 'available');
+      setUsernameAvailabilityStatus(response.data.exists ? 'taken' : 'available');
     } catch (error) {
       console.error('Error checking username:', error);
       setUsernameAvailabilityStatus(null);
     }
   };
 
-  // FIXED: Enhanced sponsor username validation with updated eligible roles
+  // FIXED: Enhanced sponsor username validation using edge function
   const checkSponsorUsername = async (sponsorName: string) => {
     if (sponsorName.length < 3) {
       setSponsorValidationStatus(null);
@@ -278,35 +282,34 @@ const SignupForm = () => {
     setSponsorError('');
 
     try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('username, role')
-        .eq('username', sponsorName.toLowerCase())
-        .maybeSingle();
+      // Call check-sponsor edge function
+      const response = await apiClient.post('/functions/v1/check-sponsor', { 
+        username: sponsorName.toLowerCase() 
+      });
 
-      if (error) throw error;
+      if (response.error) {
+        console.error('Error checking sponsor:', response.error);
+        setSponsorValidationStatus(null);
+        setSponsorError('Error validating sponsor username. Please try again.');
+        return;
+      }
 
-      console.log('🟢 checkSponsor', sponsorName, { exists: !!data, allowed: data ? ['student', 'teacher', 'tutor', 'ceo'].includes(data.role.toLowerCase()) : false, data });   // ← DEBUG LOG ADDED
+      console.log('🟢 checkSponsor', sponsorName, { 
+        exists: response.data.exists, 
+        allowed: response.data.allowed 
+      });
 
-      if (data) {
-        // UPDATED: Students can now also be sponsors - only admin and support cannot refer
-        const eligibleRoles = ['student', 'teacher', 'tutor', 'ceo'];
-        const ineligibleRoles = ['admin', 'support'];
-        
-        if (eligibleRoles.includes(data.role.toLowerCase())) {
+      if (response.data.exists) {
+        if (response.data.allowed) {
           setSponsorValidationStatus('valid');
           setSponsorError('');
-        } else if (ineligibleRoles.includes(data.role.toLowerCase())) {
-          setSponsorValidationStatus('invalid');
-          setSponsorError('This user cannot be a sponsor. Only Students, Teachers, Tutors, and CEOs can refer people.');
         } else {
-          // Fallback for any unexpected role
           setSponsorValidationStatus('invalid');
-          setSponsorError('This user role is not eligible to be a sponsor.');
+          setSponsorError('Admins & support cannot sponsor');
         }
       } else {
         setSponsorValidationStatus('invalid');
-        setSponsorError('Sponsor username not found. Please check the spelling.');
+        setSponsorError('Sponsor username not found');
       }
     } catch (error) {
       console.error('Error checking sponsor username:', error);
@@ -330,7 +333,7 @@ const SignupForm = () => {
       if (validation.isValid && value.length >= 3) {
         const timeout = setTimeout(() => {
           checkUsernameAvailability(value);
-        }, 500);
+        }, 400); // 400ms debounce as per user's request
         setUsernameCheckTimeout(timeout);
       } else {
         setUsernameAvailabilityStatus(null);
@@ -355,7 +358,7 @@ const SignupForm = () => {
       }
     }
     
-    // NEW: Special handling for sponsor name
+    // NEW: Special handling for sponsor name with 400ms debounce
     if (field === 'sponsorName') {
       // Clear existing timeout
       if (sponsorCheckTimeout) {
@@ -366,7 +369,7 @@ const SignupForm = () => {
       if (value.length >= 3) {
         const timeout = setTimeout(() => {
           checkSponsorUsername(value);
-        }, 500);
+        }, 400); // 400ms debounce as per user's request
         setSponsorCheckTimeout(timeout);
       } else {
         setSponsorValidationStatus(null);
@@ -530,7 +533,7 @@ const SignupForm = () => {
       }
 
       if (sponsorValidationStatus === 'invalid') {
-        setError('Invalid sponsor username. Please provide a valid sponsor username.');
+        setError(sponsorError || 'Invalid sponsor username. Please provide a valid sponsor username.');
         return;
       }
 
