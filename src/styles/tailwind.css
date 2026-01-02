@@ -312,6 +312,13 @@ body {
   animation: slide-in-right 0.3s ease-out forwards;
 }
 
+/* ADDITIVE: Shimmer animation for video skeleton loader */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 @layer base {
   :root {
     /* Primary Colors */

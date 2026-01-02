@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle, Play, Headphones, FileDown, Lock, Trophy, Clock } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle, Headphones, FileDown, Lock, Trophy, Clock } from 'lucide-react';
 import { lmsService, LessonWithContent } from '../../../services/lmsService';
 import { useAuth } from '../../../contexts/AuthContext';
 
@@ -20,6 +20,7 @@ const LessonPlayer: React.FC<LessonPlayerProps> = ({ lessonId, onBack, onNextLes
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
   const [startTime] = useState(Date.now());
+  const [videoReady, setVideoReady] = useState(false);
 
   useEffect(() => {
     if (!user?.id || !lessonId) return;
@@ -180,11 +181,26 @@ const LessonPlayer: React.FC<LessonPlayerProps> = ({ lessonId, onBack, onNextLes
         </div>
 
         {currentContent.contentType === 'video' && (
-          <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden mb-4">
-            <div className="w-full h-full flex items-center justify-center">
-              <Play className="w-16 h-16 text-white" />
-              <p className="text-white ml-3">Video: {currentContent.contentUrl}</p>
-            </div>
+          <div className="relative aspect-video bg-gray-900 rounded-lg overflow-hidden mb-4">
+            {!videoReady && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-900 rounded-lg overflow-hidden">
+                <div className="w-full h-full animate-pulse">
+                  <div className="bg-gray-700 dark:bg-gray-800 w-full h-full" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]" />
+                </div>
+              </div>
+            )}
+            <video
+              className="w-full h-full"
+              controls
+              onLoadedData={() => setVideoReady(true)}
+              onLoadStart={() => setVideoReady(false)}
+              onError={() => setVideoReady(true)}
+              preload="metadata"
+            >
+              <source src={currentContent.contentUrl} type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
           </div>
         )}
 
