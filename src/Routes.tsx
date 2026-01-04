@@ -12,6 +12,7 @@ import RoleBasedDashboardHub from './pages/role-based-dashboard-hub';
 import ResetPasswordPage from './pages/reset-password';
 import CheckoutPage from './pages/checkout';
 import CheckoutSuccessPage from './pages/checkout/success';
+import SearchPage from './pages/search-results-discovery-hub';
 
 const RoutesContent: React.FC = () => {
   useGoogleAnalytics();
@@ -24,6 +25,7 @@ const RoutesContent: React.FC = () => {
         <Route path="/landing-page" element={<LandingPage />} />
         <Route path="/loading-screen" element={<LoadingScreen />} />
         <Route path="/role-based-dashboard-hub" element={<RoleBasedDashboardHub />} />
+        <Route path="/search-results-discovery-hub" element={<SearchPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />

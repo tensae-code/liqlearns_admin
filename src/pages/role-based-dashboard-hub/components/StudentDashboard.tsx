@@ -4,6 +4,7 @@ import { Search, Filter, ShoppingCart, Award, Download } from 'lucide-react';
 import { Video } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
+import { supabase } from '../../../services/supabaseClient';
 import { 
   studentDashboardService, 
   StudentStats, 
@@ -546,8 +547,39 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
         setLoading(true);
         setError(null);
 
+        // FIX: Query student_profiles directly instead of using edge function
+        const { data: profileData, error: profileError } = await supabase
+          .from('student_profiles')
+          .select('xp, gold, streak, level, aura_points')
+          .eq('user_id', user.id)
+          .single();
+
+        if (profileError) {
+          throw new Error(`Failed to fetch profile: ${profileError.message}`);
+        }
+
+        // FIX: Get enrollment counts
+        const { data: enrollmentData, error: enrollmentError } = await supabase
+          .from('course_enrollments')
+          .select('status')
+          .eq('student_id', user.id);
+
+        if (enrollmentError) {
+          throw new Error(`Failed to fetch enrollments: ${enrollmentError.message}`);
+        }
+
+        const statsData = {
+          xp: profileData?.xp || 0,
+          streak: profileData?.streak || 0,
+          level: profileData?.level || 1,
+          aura_points: profileData?.aura_points || 0,
+          gold: profileData?.gold || 0,
+          enrolled_courses: enrollmentData?.length || 0,
+          completed_courses: enrollmentData?.filter(e => e.status === 'completed').length || 0
+        };
+
+        // Load other dashboard data using existing services
         const [
-          statsData, 
           skillsData, 
           achievementsData, 
           missionsData, 
@@ -564,7 +596,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
           downlineData,
           earningsData
         ] = await Promise.all([
-          studentDashboardService.getStudentStats(user.id),
           studentDashboardService.getSkillProgress(user.id),
           studentDashboardService.getRecentAchievements(user.id, 3),
           studentDashboardService.getDailyMissions(user.id),
@@ -583,7 +614,18 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
         ]);
 
         if (isMounted) {
-          setStats(statsData);
+          // Use real stats from Supabase
+          setStats({
+            totalXP: statsData.xp,
+            totalLessons: statsData.enrolled_courses,
+            currentStreak: statsData.streak,
+            level: statsData.level,
+            auraPoints: statsData.aura_points,
+            gold: statsData.gold,
+            enrolledCourses: statsData.enrolled_courses,
+            completedCourses: statsData.completed_courses
+          });
+          
           setSkillProgress(skillsData);
           setRecentAchievements(achievementsData);
           setDailyMissions(missionsData);
@@ -603,7 +645,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
           const today = new Date().toDateString();
           const lastShownDate = localStorage.getItem('lastStreakAnimationDate');
           
-          if (lastShownDate !== today && statsData?.currentStreak > 0) {
+          if (lastShownDate !== today && statsData.streak > 0) {
             setTimeout(() => {
               setShowStreakAnimation(true);
               localStorage.setItem('lastStreakAnimationDate', today);
