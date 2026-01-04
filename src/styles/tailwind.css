@@ -248,6 +248,11 @@ body {
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
 }
 
+/* NEW: Card hover effects with shine */
+.card-hover {
+  @apply transition-all duration-200 hover:scale-105 hover:shadow-lg hover:border-orange-500;
+}
+
 /* Statistics counter animation */
 .counter-animation {
   transition: all 0.3s ease-out;
@@ -316,6 +321,26 @@ body {
 @keyframes shimmer {
   100% {
     transform: translateX(100%);
+  }
+}
+
+@keyframes progress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@keyframes confetti {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
   }
 }
 

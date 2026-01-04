@@ -10,6 +10,11 @@ import CircularProgress from './components/CircularProgress';
 import MarketplaceGrid from '@/features/marketplace/components/MarketplaceGrid';
 import { useNavigate } from 'react-router-dom';
 
+
+
+
+
+
 // ... keep existing imports and interfaces ...
 
 interface StudentDashboardProps {
@@ -423,7 +428,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
     </div>
   );
 
-  // MODIFIED: Update renderDashboardSection to add Enroll button and marketplace section
+  // MODIFIED: Update renderDashboardSection to add enrollment stats and continue learning placeholders
   const renderDashboardSection = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-orange-50 to-white p-4 sm:p-6 lg:p-8">
@@ -441,10 +446,34 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
           )}
         </div>
 
-        {/* Stats Cards Grid */}
+        {/* Stats Cards Grid with hover effects */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {/* Stats Cards */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+          {/* Enrolled Courses Stat */}
+          <div className="card-hover bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-6 h-6 text-orange-500" />
+                <h3 className="text-lg font-semibold text-gray-900">Enrolled</h3>
+              </div>
+              <div className="text-2xl font-bold text-orange-500">0</div>
+            </div>
+            <p className="text-sm text-gray-600">Active courses</p>
+          </div>
+
+          {/* Completed Lessons Stat */}
+          <div className="card-hover bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Target className="w-6 h-6 text-orange-500" />
+                <h3 className="text-lg font-semibold text-gray-900">Completed</h3>
+              </div>
+              <div className="text-2xl font-bold text-orange-500">0</div>
+            </div>
+            <p className="text-sm text-gray-600">Lessons finished</p>
+          </div>
+
+          {/* Streak Stat */}
+          <div className="card-hover bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Zap className="w-6 h-6 text-orange-500" />
@@ -452,32 +481,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
               </div>
               <div className="text-2xl font-bold text-orange-500">{stats?.currentStreak || 0}</div>
             </div>
-            <p className="text-sm text-gray-600">Current day streak</p>
+            <p className="text-sm text-gray-600">Day streak</p>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <BookOpen className="w-6 h-6 text-orange-500" />
-                <h3 className="text-lg font-semibold text-gray-900">Courses</h3>
-              </div>
-              <div className="text-2xl font-bold text-orange-500">{courseOptions.length}</div>
-            </div>
-            <p className="text-sm text-gray-600">Total courses available</p>
-          </div>
-
-          <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Target className="w-6 h-6 text-orange-500" />
-                <h3 className="text-lg font-semibold text-gray-900">Outcomes</h3>
-              </div>
-              <div className="text-2xl font-bold text-orange-500">{courseOutcomes.length}</div>
-            </div>
-            <p className="text-sm text-gray-600">Course outcomes defined</p>
-          </div>
-
-          <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+          {/* Attendance Stat */}
+          <div className="card-hover bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Calendar className="w-6 h-6 text-orange-500" />
@@ -485,13 +493,31 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
               </div>
               <div className="text-2xl font-bold text-orange-500">{attendanceStats?.attendanceRate || 0}%</div>
             </div>
-            <p className="text-sm text-gray-600">Current attendance rate</p>
+            <p className="text-sm text-gray-600">Attendance rate</p>
+          </div>
+        </div>
+
+        {/* Continue Learning Section */}
+        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-8">
+          <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <BookOpen className="w-6 h-6 text-orange-500" />
+            Continue Learning
+          </h3>
+          <div className="text-center py-8">
+            <p className="text-gray-500 mb-4">No courses yet. Click Enroll to start!</p>
+            <button
+              onClick={() => navigate('/marketplace-hub')}
+              className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-6 py-3 text-white font-semibold hover:bg-orange-600 transition-colors"
+            >
+              <ShoppingCart className="h-5 w-5" />
+              Browse Courses
+            </button>
           </div>
         </div>
 
         {/* Day Streak Card */}
         <div 
-          className="bg-gradient-to-br from-orange-500 to-yellow-500 rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow mb-8"
+          className="card-hover bg-gradient-to-br from-orange-500 to-yellow-500 rounded-xl shadow-lg p-6 cursor-pointer mb-8"
           onClick={handleStreakCardClick}
         >
           <div className="flex items-center justify-between">
@@ -508,13 +534,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
           </div>
         </div>
 
-        {/* NEW: Marketplace Section */}
+        {/* Marketplace Section with card hover */}
         <div className="mt-12">
           <MarketplaceGrid />
         </div>
-
-        {/* Continue with other dashboard sections */}
-        {/* ... rest of dashboard content ... */}
       </div>
     );
   };

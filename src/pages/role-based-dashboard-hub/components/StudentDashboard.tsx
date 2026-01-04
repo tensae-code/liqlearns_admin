@@ -52,9 +52,21 @@ import StatCardModal, { StatCardType } from '../../../components/StatCardModal';
 import CheckoutModal from '../../../components/CheckoutModal';
 import CheckoutSuccessModal from '../../../components/CheckoutSuccessModal';
 
+
+
+import AchievementUnlockAnimation from '../../../components/AchievementUnlockAnimation';
+
+
+
+
+
+
+import { fetchUserStats, fetchLeaderboard, fetchUserBadges, awardQuestReward } from '../../../services/gamificationService';
+
 import { User } from '../../user-management-dashboard/types/index';
 import { useNavigate } from 'react-router-dom';
 import CourseContentView from './CourseContentView';
+
 
 
 
@@ -258,7 +270,7 @@ interface StudentDashboardProps {
   activeSection?: string;
 }
 
-export default function StudentDashboard({ activeSection = 'dashboard' }: StudentDashboardProps) {
+const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'dashboard' }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   
@@ -394,7 +406,7 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
     title: '',
     description: '',
     category: 'education',
-    difficulty: 'medium' as 'easy' | 'medium' | 'hard',
+    difficulty: 'medium\' as \'easy\' | \'medium\' | \'hard',
     deadlineHours: 24
   });
   const [isCreatingMission, setIsCreatingMission] = useState(false);
@@ -429,6 +441,17 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
   // NEW: Checkout modal state
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [showCheckoutSuccessModal, setShowCheckoutSuccessModal] = useState(false);
+
+  // Add this block - Gamification state
+  const [gamification, setGamification] = useState<any>({
+    stats: null,
+    leaderboard: [],
+    badges: [],
+    questReward: null,
+    showLevelUp: false,
+    newLevel: null
+  });
+  // End of added block
 
   // Helper functions for panel
   const openPanel = (title: string, component: React.ReactNode) => {
@@ -3451,6 +3474,83 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
     );
   };
 
+  // Load gamification data
+  useEffect(() => {
+    if (user?.id) {
+      loadGamificationData();
+    }
+  }, [user?.id]);
+
+  const loadGamificationData = async () => {
+    if (!user?.id) return;
+
+    try {
+      const [stats, leaderboard, badges] = await Promise.all([
+        fetchUserStats(user.id),
+        fetchLeaderboard(),
+        fetchUserBadges(user.id)
+      ]);
+
+      setGamification(prev => ({
+        ...prev,
+        stats,
+        leaderboard,
+        badges
+      }));
+    } catch (error) {
+      console.error('Error loading gamification data:', error);
+    }
+  };
+
+  // Handle quest completion with rewards
+  const handleCompleteQuest = async (questId: string, questName: string, xpReward: number, goldReward: number) => {
+    if (!user?.id) return;
+
+    try {
+      const oldLevel = gamification.stats?.currentLevel || 1;
+      
+      // Award the reward
+      const leveledUp = await awardQuestReward(user.id, xpReward, goldReward);
+
+      // Show reward feedback
+      setGamification(prev => ({
+        ...prev,
+        questReward: {
+          xp: xpReward,
+          gold: goldReward,
+          questName
+        }
+      }));
+
+      // Reload stats
+      const newStats = await fetchUserStats(user.id);
+      
+      if (leveledUp && newStats) {
+        setGamification(prev => ({
+          ...prev,
+          stats: newStats,
+          showLevelUp: true,
+          newLevel: newStats.currentLevel
+        }));
+      } else if (newStats) {
+        setGamification(prev => ({
+          ...prev,
+          stats: newStats
+        }));
+      }
+
+      // Reload badges to check for new unlocks
+      const badges = await fetchUserBadges(user.id);
+      setGamification(prev => ({
+        ...prev,
+        badges
+      }));
+
+    } catch (error) {
+      console.error('Error completing quest:', error);
+    }
+  };
+
   // Main render logic
   if (loading) {
     return (
@@ -3466,7 +3566,7 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 via-orange-50 to-white p-4">
-        <div className="bg-white rounded-2xl p-8 shadow-lg border border-red-200 max-w-md w-full">
+        <div className="bg-white rounded-2xl p-8 shadow-lg text-center">
           <div className="text-red-500 text-center mb-4">
             <svg className="w-16 h-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -3486,11 +3586,9 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 overflow-x-hidden max-w-full">
-      {/* Streak animation overlay */}
-      {showStreakAnimation && (
-        <StreakGiftAnimation onClose={() => setShowStreakAnimation(false)} />
-      )}
+    <div className="min-h-screen bg-gray-50">
+      {/* Achievement Unlock Animation (Global) */}
+      <AchievementUnlockAnimation />
 
       {/* Loading state */}
       {loading && (
@@ -3731,4 +3829,6 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
       />
     </div>
   );
-}
+};
+
+export default StudentDashboard;

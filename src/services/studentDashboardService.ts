@@ -74,6 +74,7 @@ export interface StudentStats {
   totalXp: number;
   currentLevel: number;
   auraPoints: number;
+  gold: number; // ADD: Missing gold property
 }
 
 class StudentDashboardService {
@@ -112,6 +113,15 @@ class StudentDashboardService {
     const auraPoints = auraData?.reduce((sum: number, record: any) => 
       sum + (record.achievement?.aura_points || 0), 0) || 0;
 
+    // FIX: Fetch gold balance from user_profiles table using correct column name 'gold'
+    const { data: goldData, error: goldError } = await supabase
+      .from('user_profiles')
+      .select('gold')
+      .eq('id', studentId)
+      .single();
+
+    if (goldError) throw goldError;
+
     return {
       totalLessons: enrollmentsData?.length || 0,
       currentStreak,
@@ -119,7 +129,8 @@ class StudentDashboardService {
       globalRank: 3, // This would come from a leaderboard calculation
       totalXp,
       currentLevel: maxLevel,
-      auraPoints
+      auraPoints,
+      gold: goldData?.gold || 0, // ADD: Include gold balance in return
     };
   }
 

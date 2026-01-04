@@ -24,17 +24,37 @@ A modern React-based project utilizing the latest frontend technologies and tool
 - Node.js (v14.x or higher)
 - npm
 
-## 🛠️ Installation
+## 🚀 Installation
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-   
-2. Start the development server:
-   ```bash
-   npm start
-   ```
+### 1. Install dependencies
+
+```bash
+npm install
+```
+
+### 2. Set up environment variables
+
+Copy `.env.example` to `.env` and add your Supabase keys:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env` and fill in your actual values.
+
+### 3. Run development server
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:5173` in your browser.
+
+### 4. Test login
+
+Use demo credentials:
+- Email: `student@liqlearns.com`
+- Password: `student123`
 
 ## 📁 Project Structure
 
