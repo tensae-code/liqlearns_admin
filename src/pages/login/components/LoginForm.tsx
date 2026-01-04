@@ -256,14 +256,7 @@ const LoginForm = ({ className = '' }: LoginFormProps) => {
             disabled={loginState.isLoading}
             className="mt-8"
           >
-            {loginState.isLoading ? (
-              <div className="flex items-center justify-center space-x-2">
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Signing In...</span>
-              </div>
-            ) : (
-              'Sign In'
-            )}
+            Sign In
           </Button>
         </form>
       ) : (
@@ -319,7 +312,7 @@ const LoginForm = ({ className = '' }: LoginFormProps) => {
             disabled={forgotPasswordLoading || forgotPasswordSuccess}
             onClick={handleForgotPassword}
           >
-            {forgotPasswordLoading ? 'Sending...' : 'Send Reset Link'}
+            Send Reset Link
           </Button>
 
           <button

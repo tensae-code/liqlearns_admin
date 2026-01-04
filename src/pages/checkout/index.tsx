@@ -4,6 +4,7 @@ import { ShoppingCart, CreditCard, Trash2, ArrowLeft, AlertCircle } from 'lucide
 import { useAuth } from '../../contexts/AuthContext';
 import { marketplaceService, CartItem } from '../../services/marketplaceService';
 import { stripeService } from '../../services/stripeService';
+import Button from '../../components/ui/Button';
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
@@ -220,23 +221,19 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              <button
+              <Button
                 onClick={handleCheckout}
                 disabled={processingPayment || cartItems.length === 0}
-                className="w-full py-3 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                loading={processingPayment}
+                iconName="CreditCard"
+                iconPosition="left"
+                variant="default"
+                size="default"
+                fullWidth
+                className="py-3"
               >
-                {processingPayment ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="w-5 h-5" />
-                    Complete Purchase
-                  </>
-                )}
-              </button>
+                Complete Purchase
+              </Button>
 
               <p className="text-xs text-gray-500 mt-4 text-center">
                 Secure payment powered by Stripe

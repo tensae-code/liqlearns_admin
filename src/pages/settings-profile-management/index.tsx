@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Camera, Lock, Bell, Shield, Mail, Phone, MapPin, Calendar, Languages, Save, Globe, Target } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import GDPRPrivacySection from '../../components/GDPRPrivacySection';
+import Button from '../../components/ui/Button';
 
 interface SettingsProfileManagementProps {
   userRole?: string;
@@ -466,23 +467,18 @@ const SettingsProfileManagement: React.FC<SettingsProfileManagementProps> = ({ u
 
           {/* Save Profile Button */}
           <div className="flex justify-end">
-            <button
+            <Button
               onClick={handleSaveProfile}
               disabled={profileLoading}
-              className="flex items-center space-x-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+              loading={profileLoading}
+              iconName="Save"
+              iconPosition="left"
+              variant="default"
+              size="default"
+              className="px-6 py-3"
             >
-              {profileLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <>
-                  <Save className="w-5 h-5" />
-                  <span>Save Changes</span>
-                </>
-              )}
-            </button>
+              Save Changes
+            </Button>
           </div>
         </div>
       </div>
