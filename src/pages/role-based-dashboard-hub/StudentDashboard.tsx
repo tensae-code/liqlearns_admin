@@ -5,8 +5,10 @@ import { CourseSyllabus, CourseAttendance, CourseOutcome, StudentOutcomeProgress
 import CourseSelectionCard from './components/CourseSelectionCard';
 import StreakGiftAnimation from './components/StreakGiftAnimation';
 import { useAuth } from '../../contexts/AuthContext';
-import { BookOpen, Calendar, Target, Zap, ArrowLeft } from 'lucide-react';
+import { BookOpen, Calendar, Target, Zap, ArrowLeft, ShoppingCart } from 'lucide-react';
 import CircularProgress from './components/CircularProgress';
+import MarketplaceGrid from '@/features/marketplace/components/MarketplaceGrid';
+import { useNavigate } from 'react-router-dom';
 
 // ... keep existing imports and interfaces ...
 
@@ -16,6 +18,7 @@ interface StudentDashboardProps {
 
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection: initialSection = 'dashboard' }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState(initialSection);
 
   // ... keep all existing state declarations ...
@@ -420,10 +423,24 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
     </div>
   );
 
-  // MODIFIED: Update renderDashboardSection to add streak card click handler
+  // MODIFIED: Update renderDashboardSection to add Enroll button and marketplace section
   const renderDashboardSection = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-orange-50 to-white p-4 sm:p-6 lg:p-8">
+        {/* NEW: Title with Enroll Button */}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Choose Your Learning Path</h2>
+          {user?.role === 'student' && (
+            <button
+              onClick={() => navigate('/marketplace-hub')}
+              className="flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-white font-semibold hover:bg-orange-600 transition-colors shadow-sm"
+            >
+              <ShoppingCart className="h-5 w-5" />
+              Enroll
+            </button>
+          )}
+        </div>
+
         {/* Stats Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* Stats Cards */}
@@ -474,7 +491,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
 
         {/* Day Streak Card */}
         <div 
-          className="bg-gradient-to-br from-orange-500 to-yellow-500 rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow"
+          className="bg-gradient-to-br from-orange-500 to-yellow-500 rounded-xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow mb-8"
           onClick={handleStreakCardClick}
         >
           <div className="flex items-center justify-between">
@@ -489,6 +506,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
               Click to celebrate! 🎉
             </div>
           </div>
+        </div>
+
+        {/* NEW: Marketplace Section */}
+        <div className="mt-12">
+          <MarketplaceGrid />
         </div>
 
         {/* Continue with other dashboard sections */}

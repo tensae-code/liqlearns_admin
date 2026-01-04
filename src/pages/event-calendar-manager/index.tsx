@@ -26,7 +26,7 @@ const EventCalendarManager = () => {
   {
     id: '1',
     name: 'Dr. Alemayehu Tadesse',
-    avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_17c35deac-1765022060622.png",
+    avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_1bb44758a-1763293761079.png",
     alt: 'Middle-aged Ethiopian man with glasses and traditional white shirt smiling at camera',
     languages: ['Amharic', 'English'],
     specializations: ['Literature', 'Grammar'],

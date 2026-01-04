@@ -34,6 +34,23 @@ export interface CheckoutSessionParams {
   metadata?: Record<string, string>;
 }
 
+export interface CreateCheckoutSessionParams {
+  lineItems: Array<{
+    price_data: {
+      currency: string;
+      product_data: {
+        name: string;
+        description?: string;
+        images?: string[];
+      };
+      unit_amount: number;
+    };
+    quantity: number;
+  }>;
+  successUrl: string;
+  cancelUrl: string;
+}
+
 const getSuccessUrl = (): string => {
   const isProduction = import.meta.env.PROD;
   
@@ -116,22 +133,18 @@ export const createStripeCustomer = async (
   }
 };
 
-export const createCheckoutSession = async (
-  priceId: string,
-  customerId?: string
-): Promise<string> => {
+/**
+ * Create Stripe checkout session for marketplace purchases
+ */
+export const createCheckoutSession = async (params: CreateCheckoutSessionParams) => {
   try {
     const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-      body: {
-        priceId,
-        customerId,
-        successUrl: getSuccessUrl(),
-        cancelUrl: getCancelUrl(),
-      },
+      body: params
     });
 
     if (error) throw error;
-    return data.url;
+    
+    return data as { sessionId: string; url: string };
   } catch (error: any) {
     console.error('Error creating checkout session:', error);
     throw new Error(error.message || 'Failed to create checkout session');
@@ -177,10 +190,11 @@ export const getUserSubscription = async (userId: string) => {
         has_active_subscription
       `)
       .eq('id', userId)
-      .single();
+      .maybeSingle();
     
     if (error) throw error;
     
+    // Return null if no profile found, otherwise return the subscription data
     return data;
   } catch (error) {
     console.error('Error fetching user subscription:', error);
@@ -226,4 +240,15 @@ export const resumeSubscription = async (
     console.error('Error resuming subscription:', error);
     return false;
   }
+};
+
+// Export service object with all methods
+export const stripeService = {
+  fetchSubscriptionPlans,
+  createStripeCustomer,
+  createCheckoutSession,
+  getCustomerPortalUrl,
+  getUserSubscription,
+  cancelSubscription,
+  resumeSubscription
 };

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Trophy, Target, Zap, Star, TrendingUp, Calendar, Play, BookMarked, Headphones, Music, Gamepad2, BookAudio, Type, FileText, Dumbbell, BookCopy, Film, DollarSign, Users, Share2, Link2, Package, Edit3, Plus, Upload, Check, X, MessageSquare, BookOpen } from 'lucide-react';
-import { Search, Filter, ShoppingCart, Award, Download, Eye, Heart } from 'lucide-react';
+import { Search, Filter, ShoppingCart, Award, Download } from 'lucide-react';
 import { Video } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -12,12 +12,14 @@ import {
   DailyMission,
   StudyCalendarEvent 
 } from '../../../services/studentDashboardService';
-import { marketplaceService, MarketplaceProduct, PaymentMethod, ProductCategory } from '../../../services/marketplaceService';
+import { marketplaceService, MarketplaceProduct, PaymentMethod, ProductCategory, CartItem, AuthorProfile } from '../../../services/marketplaceService';
 import { resourceUnlockService, TutoringResource, StudentLevel } from '../../../services/resourceUnlockService';
 // NEW: Import LMS Service
 import { lmsService } from '../../../services/lmsService';
 import { Assignment, CourseDiscussion, QuizTemplate, GradeRecord, CourseSyllabus, CourseAttendance, AttendanceStats, CourseOutcome, StudentOutcomeProgress, CourseFile, CoursePerson, CourseAnalytics } from '../../../services/lmsService';
 import { studyRoomService } from '../../../services/studyRoomService';
+// Add this import for courseContentService
+import { courseContentService } from '../../../services/courseContentService';
 // NEW: Import Phase 2 services
 import { 
   certificateService, 
@@ -46,15 +48,16 @@ import HelpCenter from './HelpCenter';
 import StudyRoomHub from '../../../components/StudyRoomHub';
 // NEW: Import StatCardModal component
 import StatCardModal, { StatCardType } from '../../../components/StatCardModal';
-
-
-
-// NEW: Import CourseContentView component
-import CourseContentView from './CourseContentView';
-// NEW: Import courseContentService for course mapping
-import { courseContentService } from '../../../services/courseContentService';
+// NEW: Import checkout modals
+import CheckoutModal from '../../../components/CheckoutModal';
+import CheckoutSuccessModal from '../../../components/CheckoutSuccessModal';
 
 import { User } from '../../user-management-dashboard/types/index';
+import { useNavigate } from 'react-router-dom';
+import CourseContentView from './CourseContentView';
+
+
+
 
 // NEW: Add courseOptions constant at the top level
 const courseOptions = [
@@ -257,6 +260,7 @@ interface StudentDashboardProps {
 
 export default function StudentDashboard({ activeSection = 'dashboard' }: StudentDashboardProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   
   // State declarations (already correct - keep as is)
   const [stats, setStats] = useState<StudentStats | null>(null);
@@ -390,7 +394,7 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
     title: '',
     description: '',
     category: 'education',
-    difficulty: 'medium\' as \'easy\' | \'medium\' | \'hard',
+    difficulty: 'medium' as 'easy' | 'medium' | 'hard',
     deadlineHours: 24
   });
   const [isCreatingMission, setIsCreatingMission] = useState(false);
@@ -399,6 +403,32 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
   // NEW: Stat card modal state
   const [showStatCardModal, setShowStatCardModal] = useState(false);
   const [selectedStatCard, setSelectedStatCard] = useState<StatCardType | null>(null);
+
+  // NEW: Cart state
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [showCartModal, setShowCartModal] = useState(false);
+  const [cartLoading, setCartLoading] = useState(false);
+
+  // NEW: Author shop state
+  const [showAuthorShop, setShowAuthorShop] = useState(false);
+  const [selectedAuthor, setSelectedAuthor] = useState<AuthorProfile | null>(null);
+  const [authorProducts, setAuthorProducts] = useState<MarketplaceProduct[]>([]);
+  const [authorShopLoading, setAuthorShopLoading] = useState(false);
+
+  // NEW: Enhanced search state
+  const [searchMode, setSearchMode] = useState<'tool' | 'lesson' | 'item'>('tool');
+
+  // FIX: Move marketplace section state to top level (prevent hooks violation)
+  const [marketplaceViewMode, setMarketplaceViewMode] = useState<'tool' | 'subject'>('tool');
+  const [marketplaceSearchTerm, setMarketplaceSearchTerm] = useState('');
+  const [debouncedMarketplaceSearch, setDebouncedMarketplaceSearch] = useState('');
+  const [selectedMarketplaceCategory, setSelectedMarketplaceCategory] = useState<string | null>(null);
+  const [categoryItems, setCategoryItems] = useState<MarketplaceProduct[]>([]);
+  const [itemsLoading, setItemsLoading] = useState(false);
+
+  // NEW: Checkout modal state
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  const [showCheckoutSuccessModal, setShowCheckoutSuccessModal] = useState(false);
 
   // Helper functions for panel
   const openPanel = (title: string, component: React.ReactNode) => {
@@ -596,6 +626,29 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
       loadStudyRooms();
     }
   }, [activeSection, user?.id]);
+
+  // Load cart items
+  useEffect(() => {
+    if (user?.id && activeSection === 'marketplace') {
+      loadCartItems();
+    }
+  }, [user?.id, activeSection]);
+
+  // FIX: Move marketplace search debounce effect to top level
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedMarketplaceSearch(marketplaceSearchTerm), 300);
+    return () => clearTimeout(id);
+  }, [marketplaceSearchTerm]);
+
+  // NEW: Check for checkout success from URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('checkout') === 'success') {
+      setShowCheckoutSuccessModal(true);
+      // Clear URL parameter
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   const loadMarketplaceProducts = async () => {
     try {
@@ -809,6 +862,64 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
       console.error('Error loading study rooms:', error);
     } finally {
       setStudyRoomLoading(false);
+    }
+  };
+
+  // NEW: Load cart items
+  const loadCartItems = async () => {
+    if (!user?.id) return;
+    try {
+      const items = await marketplaceService.getCartItems(user.id);
+      setCartItems(items);
+    } catch (err: any) {
+      console.error('Error loading cart:', err);
+    }
+  };
+
+  // NEW: Add to cart handler
+  const handleAddToCart = async (productId: string) => {
+    if (!user?.id) {
+      alert('Please login to add items to cart');
+      return;
+    }
+
+    try {
+      await marketplaceService.addToCart(productId);
+      alert('Item added to cart!');
+      await loadCartItems();
+    } catch (err: any) {
+      alert(err.message || 'Failed to add to cart');
+    }
+  };
+
+  // NEW: Remove from cart handler
+  const handleRemoveFromCart = async (cartItemId: string) => {
+    try {
+      await marketplaceService.removeFromCart(cartItemId);
+      await loadCartItems();
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove from cart');
+    }
+  };
+
+  // NEW: Load author shop
+  const handleAuthorClick = async (authorId: string) => {
+    try {
+      setAuthorShopLoading(true);
+      setShowAuthorShop(true);
+      
+      const [profile, products] = await Promise.all([
+        marketplaceService.getAuthorProfile(authorId),
+        marketplaceService.getAuthorProducts(authorId)
+      ]);
+      
+      setSelectedAuthor(profile);
+      setAuthorProducts(products);
+    } catch (err: any) {
+      console.error('Error loading author shop:', err);
+      alert(err.message || 'Failed to load author shop');
+    } finally {
+      setAuthorShopLoading(false);
     }
   };
 
@@ -1177,9 +1288,17 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
       <div className="space-y-4 sm:space-y-6 pb-6 sm:pb-8 bg-gradient-to-br from-gray-50 via-orange-50 to-white min-h-screen p-3 sm:p-4 md:p-6 max-w-full overflow-x-hidden">
         {/* Course Selection Section */}
         <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
-          <div className="mb-4 sm:mb-6">
-            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mb-2">Choose Your Learning Path</h2>
-            <p className="text-sm sm:text-base text-gray-600">Select a course to access specialized learning resources</p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
+            <div className="flex-1">
+              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mb-2">Choose Your Learning Path</h2>
+              <p className="text-sm sm:text-base text-gray-600">Select a course to access specialized learning resources</p>
+            </div>
+            
+            {/* NEW: Enroll Button */}
+            <button className="flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-white font-semibold hover:bg-orange-600 transition-colors text-sm sm:text-base flex-shrink-0">
+              <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5" />
+              Enroll
+            </button>
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
@@ -2115,287 +2234,491 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
   };
 
   const renderMarketplaceSection = () => {
-    const categories = [
-      { value: 'all', label: 'All Categories' },
-      { value: 'ebook', label: 'E-Books' },
-      { value: 'video', label: 'Videos' },
-      { value: 'audio', label: 'Audio' },
-      { value: 'flashcards', label: 'Flashcards' },
-      { value: 'worksheet', label: 'Worksheets' },
-      { value: 'guide', label: 'Guides' },
-      { value: 'notes', label: 'Notes' }
+    // Add this block - Define marketplace categories
+    const TOOL_CATEGORIES = [
+      { id: 'ebook', name: 'Books', icon: BookOpen, color: 'text-blue-500', count: 45, description: 'Educational books and guides' },
+      { id: 'video', name: 'Videos', icon: Video, color: 'text-red-500', count: 32, description: 'Video courses and tutorials' },
+      { id: 'audio', name: 'Audio', icon: Headphones, color: 'text-purple-500', count: 28, description: 'Audio lessons and podcasts' },
+      { id: 'other', name: 'Games', icon: Gamepad2, color: 'text-green-500', count: 15, description: 'Educational games' },
+      { id: 'flashcards', name: 'Flashcards', icon: BookCopy, color: 'text-orange-500', count: 20, description: 'Study flashcards' },
+      { id: 'worksheet', name: 'Worksheets', icon: FileText, color: 'text-indigo-500', count: 38, description: 'Practice worksheets' }
     ];
 
-    const studentProducts = (products || []).filter(p => p?.paymentMethod === 'aura_points');
-    const teacherProducts = (products || []).filter(p => p?.paymentMethod === 'usd');
+    const SUBJECT_CATEGORIES = [
+      { id: 'amharic', name: 'Amharic', icon: BookOpen, color: 'text-orange-500', count: 52, description: 'Amharic language resources' },
+      { id: 'mathematics', name: 'Mathematics', icon: Target, color: 'text-blue-500', count: 48, description: 'Math learning materials' },
+      { id: 'science', name: 'Science', icon: Zap, color: 'text-purple-500', count: 35, description: 'Science resources' },
+      { id: 'english', name: 'English', icon: Type, color: 'text-red-500', count: 40, description: 'English language resources' },
+      { id: 'culture', name: 'Culture', icon: Users, color: 'text-green-500', count: 25, description: 'Cultural studies' },
+      { id: 'technology', name: 'Technology', icon: Trophy, color: 'text-indigo-500', count: 30, description: 'Tech and coding resources' }
+    ];
 
-    if (marketplaceLoading) {
-      return (
-        <div className="space-y-4 sm:space-y-6 pb-6 sm:pb-8 bg-gradient-to-br from-gray-50 via-orange-50 to-white min-h-screen p-3 sm:p-4 md:p-6 max-w-full overflow-x-hidden flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-orange-500 mx-auto"></div>
-            <p className="mt-4 text-gray-600 text-sm sm:text-base">Loading marketplace...</p>
-          </div>
-        </div>
-      );
-    }
+    type MarketplaceViewMode = 'tool' | 'subject';
+    // End of added block
+
+    // Determine current categories based on search mode
+    const currentCategories = searchMode === 'tool' ? TOOL_CATEGORIES : SUBJECT_CATEGORIES;
+
+    // Filter categories by search
+    const filteredCategories = currentCategories.filter(cat =>
+      cat.name.toLowerCase().includes(debouncedMarketplaceSearch.toLowerCase())
+    );
+
+    // Handle category card click
+    const handleCategoryClick = async (categoryId: string) => {
+      setSelectedMarketplaceCategory(categoryId);
+      setItemsLoading(true);
+      
+      try {
+        // Load items for this category
+        const filters: any = { category: categoryId };
+        const items = await marketplaceService.getActiveProducts(filters);
+        setCategoryItems(items);
+      } catch (err: any) {
+        console.error('Error loading category items:', err);
+        setCategoryItems([]);
+      } finally {
+        setItemsLoading(false);
+      }
+    };
+
+    // Handle item purchase
+    const handleItemPurchase = async (productId: string, paymentMethod: PaymentMethod) => {
+      if (!user?.id) {
+        alert('Please login to purchase');
+        return;
+      }
+
+      try {
+        await marketplaceService.purchaseProduct(productId, paymentMethod);
+        alert('Purchase successful!');
+        setSelectedMarketplaceCategory(null);
+      } catch (err: any) {
+        alert(err.message || 'Purchase failed');
+      }
+    };
 
     return (
       <div className="space-y-4 sm:space-y-6 pb-6 sm:pb-8 bg-gradient-to-br from-gray-50 via-orange-50 to-white min-h-screen p-3 sm:p-4 md:p-6 max-w-full overflow-x-hidden">
-        {/* Header - Mobile Optimized */}
+        {/* Header with Cart Button */}
         <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
-            <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
-                <Package className="w-6 h-6 sm:w-8 sm:h-8 text-orange-500" />
-                Marketplace Hub
-              </h1>
-              <p className="text-gray-600 mt-1 text-xs sm:text-sm md:text-base">Discover educational materials</p>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Package className="w-6 h-6 sm:w-8 sm:h-8 text-orange-500" />
+              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">Marketplace</h2>
             </div>
-            <button className="relative p-2 sm:p-3 bg-orange-500 text-white rounded-full hover:bg-orange-600 transition-colors">
-              <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6" />
-              {cartCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                  {cartCount}
+            
+            {/* MODIFIED: Cart Button (was Enroll) */}
+            <button 
+              onClick={() => setShowCartModal(true)}
+              className="flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-white font-semibold hover:bg-orange-600 transition-colors text-sm sm:text-base relative"
+            >
+              <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5" />
+              Cart
+              {cartItems.length > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
+                  {cartItems.length}
                 </span>
               )}
             </button>
           </div>
 
-          {/* Search and Filters - Mobile Optimized */}
-          <div className="flex flex-col gap-2 sm:gap-3">
-            <div className="flex gap-2">
-              <div className="flex-1 relative">
-                <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
-                <input
-                  type="text"
-                  placeholder="Search materials..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                  className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white text-sm sm:text-base"
-                />
-              </div>
-              <button
-                onClick={handleSearch}
-                className="px-4 sm:px-6 py-2 sm:py-3 bg-orange-500 text-white rounded-lg sm:rounded-xl hover:bg-orange-600 transition-colors font-medium text-sm sm:text-base whitespace-nowrap"
+          {/* MODIFIED: Enhanced Search with dropdown */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
+            {/* Search Mode Dropdown */}
+            <div className="flex items-center gap-2">
+              <select
+                value={searchMode}
+                onChange={(e) => setSearchMode(e.target.value as 'tool' | 'lesson' | 'item')}
+                className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 focus:ring-2 focus:ring-orange-500"
               >
-                Search
-              </button>
+                <option value="tool">By Tool</option>
+                <option value="lesson">By Lesson</option>
+                <option value="item">By Item</option>
+              </select>
             </div>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="w-full px-4 sm:px-6 py-2 sm:py-3 border-2 border-orange-500 text-orange-600 rounded-lg sm:rounded-xl hover:bg-orange-50 transition-colors font-medium flex items-center justify-center gap-2 text-sm sm:text-base"
-            >
-              <Filter className="w-4 h-4 sm:w-5 sm:h-5" />
-              Filters
-            </button>
+
+            {/* Search Input */}
+            <div className="relative flex-1 sm:flex-initial sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                value={marketplaceSearchTerm}
+                onChange={(e) => setMarketplaceSearchTerm(e.target.value)}
+                placeholder={`Search by ${searchMode}...`}
+                className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+              />
+            </div>
           </div>
 
-          {/* Filters Panel - Mobile Optimized */}
-          {showFilters && (
-            <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gray-50 rounded-lg sm:rounded-xl border border-gray-200">
-              <div className="grid grid-cols-1 gap-3 sm:gap-4">
-                <div>
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Category</label>
-                  <select
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value as ProductCategory | 'all')}
-                    className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-sm sm:text-base"
-                  >
-                    {categories.map(cat => (
-                      <option key={cat.value} value={cat.value}>{cat.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Payment Method</label>
-                  <select
-                    value={selectedPaymentMethod}
-                    onChange={(e) => setSelectedPaymentMethod(e.target.value as PaymentMethod | 'all')}
-                    className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-sm sm:text-base"
-                  >
-                    <option value="all">All Payment Methods</option>
-                    <option value="aura_points">Aura Points (Students)</option>
-                    <option value="usd">USD (Teachers)</option>
-                  </select>
-                </div>
-              </div>
+          {/* Category Cards Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3 sm:gap-4">
+            {filteredCategories.map((category) => {
+              const Icon = category.icon;
+              return (
+                <button
+                  key={category.id}
+                  onClick={() => handleCategoryClick(category.id)}
+                  className="group rounded-lg border border-gray-200 bg-white p-4 hover:shadow-lg transition-all hover:border-orange-500 text-left"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <Icon className={`h-6 w-6 ${category.color}`} />
+                    <span className="text-2xl font-bold text-orange-600">{category.count}</span>
+                  </div>
+                  <h4 className="font-semibold text-gray-900 mb-1">{category.name}</h4>
+                  <p className="text-xs text-gray-500">{category.description}</p>
+                </button>
+              );
+            })}
+          </div>
+
+          {filteredCategories.length === 0 && (
+            <div className="text-center py-8">
+              <Package className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-600">No categories found matching "{debouncedMarketplaceSearch}"</p>
             </div>
           )}
         </div>
 
-        {marketplaceError && (
-          <div className="p-3 sm:p-4 bg-red-50 border border-red-200 rounded-lg sm:rounded-xl text-red-600 text-sm sm:text-base">
-            {marketplaceError}
+        {/* Items Modal */}
+        {selectedMarketplaceCategory && (
+          <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-900">
+                  {currentCategories.find(c => c.id === selectedMarketplaceCategory)?.name} Items
+                </h3>
+                <button 
+                  onClick={() => setSelectedMarketplaceCategory(null)}
+                  className="text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {itemsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+                  <span className="ml-2 text-gray-600">Loading items...</span>
+                </div>
+              ) : categoryItems.length === 0 ? (
+                <div className="text-center py-8">
+                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-gray-600">No items available in this category</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {categoryItems.map((item) => (
+                    <div 
+                      key={item.id}
+                      className="rounded-lg border border-gray-200 p-4 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-start gap-4">
+                        {item.previewImageUrl && (
+                          <div className="w-16 h-16 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
+                            <img 
+                              src={item.previewImageUrl} 
+                              alt={item.title}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
+                        
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-gray-900 mb-1 line-clamp-1">
+                            {item.title}
+                          </h4>
+                          <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+                            {item.description}
+                          </p>
+                          
+                          {/* NEW: Author Information */}
+                          {item.sellerName && (
+                            <button
+                              onClick={() => handleAuthorClick(item.sellerId)}
+                              className="flex items-center gap-2 mb-2 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                            >
+                              <Users className="w-3 h-3" />
+                              <span>By {item.sellerName}</span>
+                            </button>
+                          )}
+                          
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className="text-lg font-bold text-orange-600">
+                                {item.paymentMethod === 'aura_points' ? (
+                                  <span className="flex items-center gap-1">
+                                    <Award className="w-4 h-4" />
+                                    {item.price} Points
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1">
+                                    <DollarSign className="w-4 h-4" />
+                                    ${item.price}
+                                  </span>
+                                )}
+                              </span>
+                              
+                              <span className="flex items-center gap-1 text-xs text-gray-500">
+                                <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
+                                {item.ratingAverage.toFixed(1)}
+                              </span>
+                            </div>
+                            
+                            {/* MODIFIED: Add to Cart button (was Buy) */}
+                            <button
+                              onClick={() => handleAddToCart(item.id)}
+                              className="rounded-lg bg-orange-500 px-4 py-2 text-white text-sm font-semibold hover:bg-orange-600 transition-colors flex items-center gap-2"
+                            >
+                              <Plus className="w-4 h-4" />
+                              Add
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Student Marketplace Section - Mobile Optimized */}
-        <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <Award className="w-5 h-5 sm:w-6 sm:h-6 text-purple-500" />
-              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">Student Marketplace</h2>
-              <span className="px-2 sm:px-3 py-0.5 sm:py-1 bg-purple-100 text-purple-700 rounded-full text-xs sm:text-sm font-medium">
-                Aura Points
-              </span>
-            </div>
-            <p className="text-gray-600 text-xs sm:text-sm">{studentProducts.length} items</p>
-          </div>
+        {/* NEW: Cart Modal */}
+        {showCartModal && (
+          <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <ShoppingCart className="w-6 h-6 text-orange-500" />
+                  Shopping Cart ({cartItems.length} items)
+                </h3>
+                <button 
+                  onClick={() => setShowCartModal(false)}
+                  className="text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
 
-          {studentProducts.length === 0 ? (
-            <div className="text-center py-8 sm:py-12">
-              <Package className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-600 text-sm sm:text-base">No student products available</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
-              {studentProducts.map((product) => (
-                <div key={product.id} className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all">
-                  {product.previewImageUrl && (
-                    <div className="h-36 sm:h-40 md:h-48 bg-gray-200 relative">
-                      <img src={product.previewImageUrl} alt={product.title} className="w-full h-full object-cover" />
-                      <div className="absolute top-2 right-2 bg-purple-500 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-medium flex items-center gap-1">
-                        <Award className="w-3 h-3 sm:w-4 sm:h-4" />
-                        {product.price}
-                      </div>
-                    </div>
-                  )}
-                  <div className="p-3 sm:p-4 md:p-5">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-gray-900 mb-1 line-clamp-2 text-sm sm:text-base">{product.title}</h3>
-                        <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">{product.description}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-3 sm:gap-4 mb-2 sm:mb-3 text-xs sm:text-sm text-gray-600">
-                      <span className="flex items-center gap-1">
-                        <Star className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-500 fill-yellow-500" />
-                        {product.ratingAverage.toFixed(1)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
-                        {product.totalSales}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 sm:gap-4 mb-3 sm:mb-4">
-                      <span className="text-xs text-gray-500">by</span>
-                      <span className="text-xs sm:text-sm font-medium text-gray-900 truncate">{product.sellerName}</span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handlePurchase(product.id, 'aura_points')}
-                        className="flex-1 px-3 sm:px-4 py-1.5 sm:py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors font-medium text-xs sm:text-sm"
-                      >
-                        Purchase
-                      </button>
-                      <button className="p-1.5 sm:p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                        <Eye className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-                      </button>
-                      <button className="p-1.5 sm:p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                        <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-                      </button>
-                    </div>
-
-                    {product.downloadsAllowed && (
-                      <div className="mt-2 sm:mt-3 flex items-center gap-2 text-xs text-gray-500">
-                        <Download className="w-3 h-3" />
-                        Downloadable
-                      </div>
-                    )}
-                  </div>
+              {/* NEW: Search bar in cart */}
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search items in cart..."
+                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+                  />
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </div>
 
-        {/* Teacher Marketplace Section - Same mobile optimizations */}
-        <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <DollarSign className="w-5 h-5 sm:w-6 sm:h-6 text-green-500" />
-              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">Teacher Premium</h2>
-              <span className="px-2 sm:px-3 py-0.5 sm:py-1 bg-green-100 text-green-700 rounded-full text-xs sm:text-sm font-medium">
-                USD
-              </span>
-            </div>
-            <p className="text-gray-600 text-xs sm:text-sm">{teacherProducts.length} items</p>
-          </div>
-
-          {teacherProducts.length === 0 ? (
-            <div className="text-center py-8 sm:py-12">
-              <Package className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-600 text-sm sm:text-base">No teacher products available</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
-              {teacherProducts.map((product) => (
-                <div key={product.id} className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all">
-                  {product.previewImageUrl && (
-                    <div className="h-36 sm:h-40 md:h-48 bg-gray-200 relative">
-                      <img src={product.previewImageUrl} alt={product.title} className="w-full h-full object-cover" />
-                      <div className="absolute top-2 right-2 bg-green-500 text-white px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-medium flex items-center gap-1">
-                        <DollarSign className="w-3 h-3 sm:w-4 sm:h-4" />
-                        ${product.price}
-                      </div>
-                    </div>
-                  )}
-                  <div className="p-3 sm:p-4 md:p-5">
-                    <div className="flex items-start justify-between mb-2 sm:mb-3">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-gray-900 mb-1 line-clamp-2 text-sm sm:text-base">{product.title}</h3>
-                        <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">{product.description}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-3 sm:gap-4 mb-2 sm:mb-3 text-xs sm:text-sm text-gray-600">
-                      <span className="flex items-center gap-1">
-                        <Star className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-500 fill-yellow-500" />
-                        {product.ratingAverage.toFixed(1)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
-                        {product.totalSales}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
-                      <span className="text-xs text-gray-500">by</span>
-                      <span className="text-xs sm:text-sm font-medium text-gray-900 truncate">{product.sellerName}</span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handlePurchase(product.id, 'usd')}
-                        className="flex-1 px-3 sm:px-4 py-1.5 sm:py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium text-xs sm:text-sm"
-                      >
-                        Purchase
-                      </button>
-                      <button className="p-1.5 sm:p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                        <Eye className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-                      </button>
-                      <button className="p-1.5 sm:p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                        <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-                      </button>
-                    </div>
-
-                    {product.downloadsAllowed && (
-                      <div className="mt-2 sm:mt-3 flex items-center gap-2 text-xs text-gray-500">
-                        <Download className="w-3 h-3" />
-                        Downloadable
-                      </div>
-                    )}
-                  </div>
+              {cartItems.length === 0 ? (
+                <div className="text-center py-12">
+                  <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-600 text-lg mb-2">Your cart is empty</p>
+                  <p className="text-sm text-gray-500">Browse marketplace to add items</p>
                 </div>
-              ))}
+              ) : (
+                <>
+                  <div className="space-y-3 mb-6">
+                    {cartItems.map((cartItem) => (
+                      <div 
+                        key={cartItem.id}
+                        className="flex items-start gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        {cartItem.product?.previewImageUrl && (
+                          <div className="w-16 h-16 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
+                            <img 
+                              src={cartItem.product.previewImageUrl} 
+                              alt={cartItem.product.title}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
+                        
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-gray-900 mb-1">
+                            {cartItem.product?.title}
+                          </h4>
+                          <p className="text-sm text-gray-600 mb-2 line-clamp-1">
+                            {cartItem.product?.description}
+                          </p>
+                          
+                          {/* Author info in cart */}
+                          {cartItem.product?.sellerName && (
+                            <button
+                              onClick={() => {
+                                setShowCartModal(false);
+                                handleAuthorClick(cartItem.product!.sellerId);
+                              }}
+                              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 mb-2"
+                            >
+                              <Users className="w-3 h-3" />
+                              By {cartItem.product.sellerName}
+                            </button>
+                          )}
+                          
+                          <span className="text-lg font-bold text-orange-600">
+                            {cartItem.product?.paymentMethod === 'aura_points' 
+                              ? `${cartItem.product.price} Points` 
+                              : `${cartItem.product?.price}`}
+                          </span>
+                        </div>
+                        
+                        <button
+                          onClick={() => handleRemoveFromCart(cartItem.id)}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Remove from cart"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Cart Summary */}
+                  <div className="border-t pt-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-lg font-semibold text-gray-900">Total:</span>
+                      <span className="text-2xl font-bold text-orange-600">
+                        ${cartItems.reduce((sum, item) => sum + (item.product?.price || 0), 0).toFixed(2)}
+                      </span>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        if (!user?.id) {
+                          alert('Please login to checkout');
+                          return;
+                        }
+                        setShowCartModal(false);
+                        setShowCheckoutModal(true);
+                      }}
+                      className="w-full py-3 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition-colors"
+                    >
+                      Proceed to Checkout
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* NEW: Author Shop Modal */}
+        {showAuthorShop && (
+          <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+              {authorShopLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+                  <span className="ml-2 text-gray-600">Loading author shop...</span>
+                </div>
+              ) : selectedAuthor ? (
+                <>
+                  {/* Author Banner */}
+                  <div 
+                    className="h-48 bg-gradient-to-r from-orange-400 to-orange-600 rounded-t-2xl relative"
+                    style={selectedAuthor.bannerUrl ? { backgroundImage: `url(${selectedAuthor.bannerUrl})`, backgroundSize: 'cover' } : {}}
+                  >
+                    <button 
+                      onClick={() => setShowAuthorShop(false)}
+                      className="absolute top-4 right-4 p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors"
+                    >
+                      <X className="w-5 h-5 text-gray-600" />
+                    </button>
+                  </div>
+
+                  {/* Author Profile */}
+                  <div className="px-6 pb-6">
+                    <div className="flex items-start gap-6 -mt-16 mb-6">
+                      <div className="w-32 h-32 bg-white rounded-full border-4 border-white shadow-lg overflow-hidden flex-shrink-0">
+                        {selectedAuthor.avatarUrl ? (
+                          <img src={selectedAuthor.avatarUrl} alt={selectedAuthor.fullName} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full bg-orange-500 flex items-center justify-center text-white text-4xl font-bold">
+                            {selectedAuthor.fullName.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="flex-1 pt-16">
+                        <h2 className="text-2xl font-bold text-gray-900 mb-2">{selectedAuthor.fullName}</h2>
+                        {selectedAuthor.bio && (
+                          <p className="text-gray-600 mb-4">{selectedAuthor.bio}</p>
+                        )}
+                        
+                        <div className="flex items-center gap-6 text-sm">
+                          <div className="flex items-center gap-2">
+                            <Package className="w-4 h-4 text-gray-500" />
+                            <span className="text-gray-700">{selectedAuthor.totalProducts} Products</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <ShoppingCart className="w-4 h-4 text-gray-500" />
+                            <span className="text-gray-700">{selectedAuthor.totalSales} Sales</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                            <span className="text-gray-700">{selectedAuthor.averageRating.toFixed(1)} Rating</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Author's Products */}
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900 mb-4">Products by {selectedAuthor.fullName}</h3>
+                      
+                      {authorProducts.length === 0 ? (
+                        <div className="text-center py-8">
+                          <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                          <p className="text-gray-600">No products available</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {authorProducts.map((product) => (
+                            <div 
+                              key={product.id}
+                              className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all"
+                            >
+                              {product.previewImageUrl && (
+                                <div className="w-full h-32 bg-gray-200 rounded-lg overflow-hidden mb-3">
+                                  <img 
+                                    src={product.previewImageUrl} 
+                                    alt={product.title}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                              )}
+                              
+                              <h4 className="font-semibold text-gray-900 mb-1">{product.title}</h4>
+                              <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
+                              
+                              <div className="flex items-center justify-between">
+                                <span className="text-lg font-bold text-orange-600">
+                                  ${product.price}
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    setShowAuthorShop(false);
+                                    handleAddToCart(product.id);
+                                  }}
+                                  className="px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition-colors flex items-center gap-2"
+                                >
+                                  <Plus className="w-4 h-4" />
+                                  Add to Cart
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -3385,6 +3708,27 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
           onClose={handleCloseStatModal}
         />
       )}
+
+      {/* NEW: Checkout Modal */}
+      <CheckoutModal
+        isOpen={showCheckoutModal}
+        onClose={() => setShowCheckoutModal(false)}
+        userId={user?.id || ''}
+        onSuccess={() => {
+          setShowCheckoutModal(false);
+          setShowCheckoutSuccessModal(true);
+          loadCartItems(); // Refresh cart
+        }}
+      />
+
+      {/* NEW: Checkout Success Modal */}
+      <CheckoutSuccessModal
+        isOpen={showCheckoutSuccessModal}
+        onClose={() => {
+          setShowCheckoutSuccessModal(false);
+          loadCartItems(); // Refresh cart after closing success modal
+        }}
+      />
     </div>
   );
 }

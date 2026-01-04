@@ -13,6 +13,14 @@ serve(async (req) => {
   }
 
   try {
+    // Add this block - Declare Deno global variable
+    declare const Deno: {
+      env: {
+        get(key: string): string | undefined;
+      };
+    };
+    // End of added block
+    
     const supabase = createClient(
       Deno?.env?.get('SUPABASE_URL') ?? '',
       Deno?.env?.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''

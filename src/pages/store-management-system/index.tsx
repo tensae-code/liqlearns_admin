@@ -41,7 +41,7 @@ const StoreManagementSystem = () => {
     category: 'Educational Books',
     price: 850.00,
     proposedPrice: 750.00,
-    images: ["https://img.rocket.new/generatedImages/rocket_gen_img_1a3b8b2f1-1764849865040.png"],
+    images: ["https://images.unsplash.com/photo-1592503286362-34e28f5a5ff7"],
     imageAlts: ['Stack of colorful educational books on wooden table with reading glasses'],
     sellerId: 'seller1',
     sellerName: 'Alemayehu Tadesse',
@@ -188,7 +188,7 @@ const StoreManagementSystem = () => {
     {
       id: '1',
       name: 'Amharic Language Learning Book Set',
-      image: "https://img.rocket.new/generatedImages/rocket_gen_img_1a3b8b2f1-1764849865040.png",
+      image: "https://images.unsplash.com/photo-1592503286362-34e28f5a5ff7",
       imageAlt: 'Stack of colorful educational books on wooden table with reading glasses',
       sales: 450,
       revenue: 337500.00

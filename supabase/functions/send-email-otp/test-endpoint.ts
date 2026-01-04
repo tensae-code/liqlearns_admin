@@ -3,6 +3,9 @@
 
 import { serve } from "https://deno.land/std@0.192.0/http/server.ts";
 
+/// <reference lib="deno.ns" />
+/// <reference types="https://deno.land/x/types/mod.d.ts" />
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -60,9 +63,7 @@ serve(async (req) => {
       console.log(`[TEST] Calling send-email-otp Edge Function with email: ${email}`);
 
       // Call the actual send-email-otp Edge Function
-      // @ts-ignore: Deno is a global in Deno runtime
       const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      // @ts-ignore: Deno is a global in Deno runtime
       const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
       if (!supabaseUrl || !supabaseServiceRoleKey) {

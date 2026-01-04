@@ -52,6 +52,28 @@ export interface ProductReview {
   reviewerName?: string;
 }
 
+export interface CartItem {
+  id: string;
+  userId: string;
+  productId: string;
+  quantity: number;
+  createdAt: string;
+  updatedAt: string;
+  product?: MarketplaceProduct;
+}
+
+export interface AuthorProfile {
+  id: string;
+  fullName: string;
+  email: string;
+  avatarUrl: string | null;
+  bannerUrl: string | null;
+  bio: string | null;
+  totalProducts: number;
+  totalSales: number;
+  averageRating: number;
+}
+
 class MarketplaceService {
   // Get all active products with seller information
   async getActiveProducts(filters?: {
@@ -320,6 +342,195 @@ class MarketplaceService {
     } catch (error: any) {
       console.error('Error adding review:', error);
       throw new Error(error.message || 'Failed to add review');
+    }
+  }
+
+  // Add item to cart
+  async addToCart(productId: string): Promise<void> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      // Check if already in cart
+      const { data: existing } = await supabase
+        .from('shopping_cart')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('product_id', productId)
+        .single();
+
+      if (existing) {
+        throw new Error('Item already in cart');
+      }
+
+      const { error } = await supabase
+        .from('shopping_cart')
+        .insert({
+          user_id: user.id,
+          product_id: productId,
+          quantity: 1
+        });
+
+      if (error) throw error;
+    } catch (error: any) {
+      console.error('Error adding to cart:', error);
+      throw new Error(error.message || 'Failed to add to cart');
+    }
+  }
+
+  // Get user's cart items
+  async getCartItems(userId: string): Promise<CartItem[]> {
+    try {
+      const { data, error } = await supabase
+        .from('shopping_cart')
+        .select(`
+          *,
+          product:marketplace_products!product_id(
+            *,
+            seller:user_profiles!seller_id(full_name, email)
+          )
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      return (data || []).map(item => ({
+        id: item.id,
+        userId: item.user_id,
+        productId: item.product_id,
+        quantity: item.quantity,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+        product: item.product ? {
+          id: item.product.id,
+          sellerId: item.product.seller_id,
+          title: item.product.title,
+          description: item.product.description,
+          category: item.product.category,
+          price: parseFloat(item.product.price),
+          paymentMethod: item.product.payment_method,
+          status: item.product.status,
+          inventoryCount: item.product.inventory_count,
+          downloadsAllowed: item.product.downloads_allowed,
+          printable: item.product.printable,
+          shareable: item.product.shareable,
+          accessExpiryDays: item.product.access_expiry_days,
+          fileUrl: item.product.file_url,
+          previewImageUrl: item.product.preview_image_url,
+          ratingAverage: parseFloat(item.product.rating_average),
+          totalSales: item.product.total_sales,
+          createdAt: item.product.created_at,
+          updatedAt: item.product.updated_at,
+          sellerName: item.product.seller?.full_name,
+          sellerEmail: item.product.seller?.email
+        } : undefined
+      }));
+    } catch (error: any) {
+      console.error('Error fetching cart items:', error);
+      throw new Error(error.message || 'Failed to load cart');
+    }
+  }
+
+  // Remove item from cart
+  async removeFromCart(cartItemId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('shopping_cart')
+        .delete()
+        .eq('id', cartItemId);
+
+      if (error) throw error;
+    } catch (error: any) {
+      console.error('Error removing from cart:', error);
+      throw new Error(error.message || 'Failed to remove from cart');
+    }
+  }
+
+  // Get author profile
+  async getAuthorProfile(authorId: string): Promise<AuthorProfile> {
+    try {
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('id, full_name, email, avatar_url, banner_url, bio')
+        .eq('id', authorId)
+        .single();
+
+      if (profileError) throw profileError;
+
+      // Get author's products count and stats
+      const { data: products, error: productsError } = await supabase
+        .from('marketplace_products')
+        .select('id, total_sales, rating_average')
+        .eq('seller_id', authorId)
+        .eq('status', 'active');
+
+      if (productsError) throw productsError;
+
+      const totalProducts = products?.length || 0;
+      const totalSales = products?.reduce((sum, p) => sum + p.total_sales, 0) || 0;
+      const averageRating = totalProducts > 0 
+        ? products.reduce((sum, p) => sum + parseFloat(p.rating_average), 0) / totalProducts 
+        : 0;
+
+      return {
+        id: profile.id,
+        fullName: profile.full_name || 'Unknown Author',
+        email: profile.email,
+        avatarUrl: profile.avatar_url,
+        bannerUrl: profile.banner_url,
+        bio: profile.bio,
+        totalProducts,
+        totalSales,
+        averageRating
+      };
+    } catch (error: any) {
+      console.error('Error fetching author profile:', error);
+      throw new Error(error.message || 'Failed to load author profile');
+    }
+  }
+
+  // Get author's products
+  async getAuthorProducts(authorId: string): Promise<MarketplaceProduct[]> {
+    try {
+      const { data, error } = await supabase
+        .from('marketplace_products')
+        .select(`
+          *,
+          seller:user_profiles!seller_id(full_name, email)
+        `)
+        .eq('seller_id', authorId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      return (data || []).map(product => ({
+        id: product.id,
+        sellerId: product.seller_id,
+        title: product.title,
+        description: product.description,
+        category: product.category,
+        price: parseFloat(product.price),
+        paymentMethod: product.payment_method,
+        status: product.status,
+        inventoryCount: product.inventory_count,
+        downloadsAllowed: product.downloads_allowed,
+        printable: product.printable,
+        shareable: product.shareable,
+        accessExpiryDays: product.access_expiry_days,
+        fileUrl: product.file_url,
+        previewImageUrl: product.preview_image_url,
+        ratingAverage: parseFloat(product.rating_average),
+        totalSales: product.total_sales,
+        createdAt: product.created_at,
+        updatedAt: product.updated_at,
+        sellerName: product.seller?.full_name,
+        sellerEmail: product.seller?.email
+      }));
+    } catch (error: any) {
+      console.error('Error fetching author products:', error);
+      throw new Error(error.message || 'Failed to load author products');
     }
   }
 }

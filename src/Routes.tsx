@@ -9,10 +9,9 @@ import { useGoogleAnalytics } from './hooks/useGoogleAnalytics';
 import LandingPage from './pages/landing-page';
 import LoadingScreen from './pages/loading-screen';
 import RoleBasedDashboardHub from './pages/role-based-dashboard-hub';
-import EmployeeApplicationForm from './pages/employee-application-form';
 import ResetPasswordPage from './pages/reset-password';
-import SettingsProfileManagement from './pages/settings-profile-management';
-import MarketplaceHub from './pages/marketplace-hub';
+import CheckoutPage from './pages/checkout';
+import CheckoutSuccessPage from './pages/checkout/success';
 
 const RoutesContent: React.FC = () => {
   useGoogleAnalytics();
@@ -25,11 +24,10 @@ const RoutesContent: React.FC = () => {
         <Route path="/landing-page" element={<LandingPage />} />
         <Route path="/loading-screen" element={<LoadingScreen />} />
         <Route path="/role-based-dashboard-hub" element={<RoleBasedDashboardHub />} />
-        <Route path="/marketplace-hub" element={<MarketplaceHub />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/settings-profile-management" element={<SettingsProfileManagement />} />
-        <Route path="/employee-application-form" element={<EmployeeApplicationForm />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/checkout" element={<CheckoutPage />} />
+        <Route path="/checkout/success" element={<CheckoutSuccessPage />} />
         <Route path="*" element={<NotFound />} />
       </RouterRoutes>
     </ErrorBoundary>

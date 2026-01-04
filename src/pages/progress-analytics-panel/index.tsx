@@ -32,7 +32,7 @@ const ProgressAnalyticsPanel = () => {
     username: 'abebetech',
     fullName: 'Abebe Kebede',
     email: 'abebe.kebede@email.com',
-    avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_11e8a20a5-1765003605182.png",
+    avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_13998e68a-1763293762914.png",
     alt: 'Professional Ethiopian man in blue shirt smiling at camera in office setting',
     selectedLanguages: ['Amharic', 'Tigrinya'],
     currentLevel: 'Advanced-sentences',
@@ -185,7 +185,7 @@ const ProgressAnalyticsPanel = () => {
   {
     id: '1',
     username: 'abebetech',
-    avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_11e8a20a5-1765003605182.png",
+    avatar: "https://img.rocket.new/generatedImages/rocket_gen_img_13998e68a-1763293762914.png",
     alt: 'Professional Ethiopian man in blue shirt smiling at camera in office setting',
     points: 2850,
     streak: 15,

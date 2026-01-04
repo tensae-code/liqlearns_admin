@@ -75,7 +75,7 @@ const ContentManagerDashboard = () => {
     fileSize: '125 MB',
     uploadedBy: 'Dr. Alemayehu Teshome',
     description: 'Comprehensive Amharic alphabet learning course designed for beginners.',
-    thumbnailUrl: "https://img.rocket.new/generatedImages/rocket_gen_img_1549ec54b-1765075254090.png",
+    thumbnailUrl: "https://img.rocket.new/generatedImages/rocket_gen_img_1d7297379-1766501579982.png",
     viewCount: 1247,
     downloadCount: 892,
     tags: ['beginner', 'alphabet', 'pronunciation', 'writing']
@@ -92,7 +92,7 @@ const ContentManagerDashboard = () => {
     fileSize: '45 MB',
     uploadedBy: 'Prof. Meron Haile',
     description: 'A curated collection of traditional Ethiopian folktales and stories.',
-    thumbnailUrl: "https://img.rocket.new/generatedImages/rocket_gen_img_158c9c539-1765698808674.png",
+    thumbnailUrl: "https://img.rocket.new/generatedImages/rocket_gen_img_1cb6ab06c-1766609972119.png",
     viewCount: 634,
     downloadCount: 423,
     tags: ['culture', 'folklore', 'reading', 'intermediate']
@@ -126,7 +126,7 @@ const ContentManagerDashboard = () => {
     fileSize: '78 MB',
     uploadedBy: 'Artist Aster Aweke',
     description: 'Traditional Ethiopian songs with lyrics in Amharic.',
-    thumbnailUrl: "https://img.rocket.new/generatedImages/rocket_gen_img_1fb04e829-1765639163676.png",
+    thumbnailUrl: "https://img.rocket.new/generatedImages/rocket_gen_img_196f599aa-1766501581695.png",
     viewCount: 2156,
     downloadCount: 1834,
     tags: ['music', 'culture', 'pronunciation', 'entertainment']
