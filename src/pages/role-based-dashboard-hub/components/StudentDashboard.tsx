@@ -47,6 +47,8 @@ import StudyRoomHub from '../../../components/StudyRoomHub';
 // NEW: Import StatCardModal component
 import StatCardModal, { StatCardType } from '../../../components/StatCardModal';
 
+
+
 // NEW: Import CourseContentView component
 import CourseContentView from './CourseContentView';
 // NEW: Import courseContentService for course mapping
@@ -388,7 +390,7 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
     title: '',
     description: '',
     category: 'education',
-    difficulty: 'medium' as 'easy' | 'medium' | 'hard',
+    difficulty: 'medium\' as \'easy\' | \'medium\' | \'hard',
     deadlineHours: 24
   });
   const [isCreatingMission, setIsCreatingMission] = useState(false);
@@ -984,8 +986,7 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
               disabled={(dailyMissions || []).length >= 7}
               className={`px-3 sm:px-4 py-2 rounded-lg transition-colors flex items-center gap-2 text-xs sm:text-sm font-medium ${
                 (dailyMissions || []).length >= 7
-                  ? 'bg-white/30 text-white/60 cursor-not-allowed' 
-                  : 'bg-white text-orange-600 hover:bg-orange-50'
+                  ? 'bg-white/30 text-white/60 cursor-not-allowed' :'bg-white text-orange-600 hover:bg-orange-50'
               }`}
             >
               <Plus className="w-4 h-4" />
@@ -1381,8 +1382,7 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
                     </p>
                     <span className={`text-xs px-2 py-1 rounded-full ${
                       member.isActive 
-                        ? 'bg-green-100 text-green-700' 
-                        : 'bg-gray-100 text-gray-600'
+                        ? 'bg-green-100 text-green-700' :'bg-gray-100 text-gray-600'
                     }`}>
                       {member.isActive ? 'Active' : 'Inactive'}
                     </span>
@@ -1613,8 +1613,7 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
                       isToday 
                         ? 'bg-orange-500 border-orange-600 text-white' 
                         : hasEvent 
-                        ? 'bg-blue-50 border-blue-200 hover:bg-blue-100' 
-                        : 'border-gray-200 hover:bg-gray-50'
+                        ? 'bg-blue-50 border-blue-200 hover:bg-blue-100' :'border-gray-200 hover:bg-gray-50'
                     }`}
                   >
                     <span className={`text-xs sm:text-sm font-medium ${isToday ? 'text-white' : 'text-gray-900'}`}>
@@ -3164,7 +3163,7 @@ export default function StudentDashboard({ activeSection = 'dashboard' }: Studen
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-orange-50 to-white overflow-x-hidden max-w-full">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 overflow-x-hidden max-w-full">
       {/* Streak animation overlay */}
       {showStreakAnimation && (
         <StreakGiftAnimation onClose={() => setShowStreakAnimation(false)} />
