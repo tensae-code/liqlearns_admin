@@ -4,6 +4,8 @@ import { Search, Filter, ShoppingCart, Award, Download } from 'lucide-react';
 import { Video } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
+// NEW: Import supabase client for real-time subscriptions
+import { supabase } from '../../../lib/supabase';
 
 import { apiClient } from '../../../lib/apiClient';
 import { 
@@ -444,6 +446,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [showCheckoutSuccessModal, setShowCheckoutSuccessModal] = useState(false);
 
+  // NEW: Real-time connection status state
+  const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
+
   // Add this block - Gamification state
   const [gamification, setGamification] = useState<any>({
     stats: null,
@@ -537,11 +542,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
     loadRealCourseIds();
   }, []);
 
-  // Load dashboard data
+  // Load dashboard data with real-time subscription
   useEffect(() => {
     if (!user?.id) return;
 
     let isMounted = true;
+    let realtimeChannel: any = null;
 
     const loadDashboardData = async () => {
       try {
@@ -667,10 +673,85 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
       }
     };
 
-    loadDashboardData();
+    // NEW: Set up Supabase real-time subscription
+    const setupRealtimeSubscription = () => {
+      console.log('🔴 Setting up real-time subscription for user:', user.id);
+      setRealtimeStatus('connecting');
 
+      // Create real-time channel for student_profiles table
+      realtimeChannel = supabase
+        .channel(`student_profile_${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+            schema: 'public',
+            table: 'student_profiles',
+            filter: `id=eq.${user.id}` // Only listen to current user's profile
+          },
+          async (payload) => {
+            console.log('🔴 Real-time update received:', payload);
+
+            // Update stats immediately from payload
+            if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+              const newData = payload.new as any;
+              
+              if (isMounted) {
+                setStats(prevStats => ({
+                  ...prevStats,
+                  totalXP: newData.xp || prevStats?.totalXP || 0,
+                  level: newData.current_level || prevStats?.level || 1,
+                  currentStreak: newData.streak || prevStats?.currentStreak || 0,
+                  auraPoints: newData.aura_points || prevStats?.auraPoints || 0,
+                  gold: newData.gold || prevStats?.gold || 0,
+                  totalLessons: prevStats?.totalLessons || 0,
+                  enrolledCourses: prevStats?.enrolledCourses || 0,
+                  completedCourses: prevStats?.completedCourses || 0
+                }));
+
+                console.log('✅ Stats updated in real-time:', {
+                  xp: newData.xp,
+                  level: newData.current_level,
+                  streak: newData.streak,
+                  auraPoints: newData.aura_points,
+                  gold: newData.gold
+                });
+              }
+            } else if (payload.eventType === 'DELETE') {
+              console.warn('⚠️ Student profile was deleted');
+              // Handle profile deletion if needed
+            }
+          }
+        )
+        .subscribe((status) => {
+          console.log('🔴 Subscription status:', status);
+          if (isMounted) {
+            if (status === 'SUBSCRIBED') {
+              setRealtimeStatus('connected');
+              console.log('✅ Real-time connection established');
+            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+              setRealtimeStatus('disconnected');
+              console.error('❌ Real-time connection failed');
+            }
+          }
+        });
+    };
+
+    // Load initial data
+    loadDashboardData();
+    
+    // Set up real-time subscription
+    setupRealtimeSubscription();
+
+    // Cleanup function
     return () => {
       isMounted = false;
+      
+      // Unsubscribe from real-time channel
+      if (realtimeChannel) {
+        console.log('🔴 Unsubscribing from real-time channel');
+        supabase.removeChannel(realtimeChannel);
+      }
     };
   }, [user?.id]);
 
@@ -1060,6 +1141,18 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
               <p className="text-sm sm:text-base text-gray-600">
                 {formatTodayDate()}
               </p>
+              
+              {/* NEW: Real-time connection status indicator */}
+              <div className="flex items-center gap-2 mt-2">
+                <div className={`w-2 h-2 rounded-full ${
+                  realtimeStatus === 'connected' ? 'bg-green-500 animate-pulse' :
+                  realtimeStatus === 'connecting'? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
+                }`}></div>
+                <span className="text-xs text-gray-600">
+                  {realtimeStatus === 'connected' ? '🟢 Live updates active' :
+                   realtimeStatus === 'connecting'? '🟡 Connecting...' : '🔴 Offline'}
+                </span>
+              </div>
             </div>
 
             {/* Right side: Streak element with animation */}
@@ -1113,11 +1206,15 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
             <p className="text-xs text-purple-600 mt-1">Click to view collection</p>
           </button>
 
-          {/* Total XP Card - NOW CLICKABLE */}
+          {/* Total XP Card - NOW CLICKABLE with real-time indicator */}
           <button
             onClick={() => handleStatCardClick('xp')}
-            className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-yellow-300 hover:shadow-lg hover:border-yellow-400 transition-all cursor-pointer text-left"
+            className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-yellow-300 hover:shadow-lg hover:border-yellow-400 transition-all cursor-pointer text-left relative"
           >
+            {/* NEW: Live update pulse indicator */}
+            {realtimeStatus === 'connected' && (
+              <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            )}
             <div className="flex items-center justify-between mb-3 sm:mb-4">
               <Trophy className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-500" />
               <span className="text-2xl sm:text-3xl font-bold text-gray-900">
