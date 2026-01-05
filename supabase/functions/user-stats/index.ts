@@ -4,7 +4,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}; // Add this semicolon
+};
+
+// Declare Deno types for runtime environment
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -23,14 +30,17 @@ serve(async (req) => {
 
     if (!userId) {
       return new Response(
-        JSON.stringify({ error: 'userId required' }), 
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'User ID is required' }), 
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
       )
     }
 
-    console.log(`🔴 Fetching stats for user: ${userId}`)
+    console.log(`🔵 Fetching stats for user: ${userId}`)
 
-    // ✅ FIX: Query student_profiles table (not user_profiles)
+    // ✅ Query student_profiles table with correct column names
     const { data: profile, error: profileError } = await supabase
       .from('student_profiles')
       .select('xp, gold, streak, current_level, aura_points')
@@ -38,70 +48,65 @@ serve(async (req) => {
       .single()
 
     if (profileError) {
-      console.error('❌ Profile query failed:', profileError)
-      // Return mock fallback data instead of crashing
-      return new Response(JSON.stringify({
-        aura_points: 1250,
-        level: 3,
-        streak: 7,
-        xp: 3400,
-        gold: 150,
-        enrolled_courses: 0,
-        completed_courses: 0,
-        _note: 'Using mock data due to DB error',
-        _error: profileError.message
-      }), { 
-        status: 200, // Return 200 instead of 500
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      })
+      console.error('❌ Profile query error:', profileError)
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to fetch user profile',
+          details: profileError.message 
+        }), 
+        { 
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
     }
 
-    // Count enrollments
+    // ✅ Count enrollments from course_enrollments table (not enrollments)
     const { data: enrollments, error: enrollError } = await supabase
-      .from('enrollments')
-      .select('status')
-      .eq('user_id', userId)
+      .from('course_enrollments')
+      .select('is_completed')
+      .eq('student_id', userId)
 
     if (enrollError) {
-      console.error('⚠️ Enrollments query failed:', enrollError)
+      console.error('⚠️ Enrollments query error:', enrollError)
+      // Don't fail completely - return profile data with 0 enrollments
     }
 
-    console.log('✅ Stats fetched successfully:', {
-      xp: profile?.xp,
-      level: profile?.current_level,
-      streak: profile?.streak,
-      auraPoints: profile?.aura_points
-    })
+    const enrolledCount = enrollments?.length || 0
+    const completedCount = enrollments?.filter(e => e.is_completed === true).length || 0
 
-    return new Response(JSON.stringify({
+    const response = {
       aura_points: profile?.aura_points || 0,
       level: profile?.current_level || 1,
       streak: profile?.streak || 0,
       xp: profile?.xp || 0,
       gold: profile?.gold || 0,
-      enrolled_courses: enrollments?.length || 0,
-      completed_courses: enrollments?.filter(e => e.status === 'completed').length || 0
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+      enrolled_courses: enrolledCount,
+      completed_courses: completedCount
+    }
+
+    console.log('✅ Stats fetched successfully:', response)
+
+    return new Response(
+      JSON.stringify(response),
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    )
 
   } catch (err: any) {
-    console.error('💥 Function crashed:', err)
+    console.error('💥 Unexpected error in user-stats function:', err)
     
-    // Return mock fallback instead of error
-    return new Response(JSON.stringify({
-      aura_points: 1250,
-      level: 3,
-      streak: 7,
-      xp: 3400,
-      gold: 150,
-      enrolled_courses: 0,
-      completed_courses: 0,
-      _note: 'Using mock data due to unexpected error',
-      _error: err.message
-    }), {
-      status: 200, // Return 200 instead of 500
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({ 
+        error: 'Internal server error',
+        details: err.message 
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    )
   }
 })

@@ -468,6 +468,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
   // NEW: Add user activities state
   const [userActivities, setUserActivities] = useState<UserActivity[]>([]);
 
+  // ✅ CACHE-BUSTING FIX: Add version state to force re-render
+  const [componentVersion, setComponentVersion] = useState(Date.now());
+
   // Helper functions for panel
   const openPanel = (title: string, component: React.ReactNode) => {
     setPanelContent({ title, component });
@@ -565,7 +568,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
         // ✅ FIX: DIRECT SUPABASE QUERY - Completely removed edge function dependency
         let statsData;
         try {
-          console.log('🔵 Fetching stats directly from Supabase (NO edge function)...');
+          console.log('🔵 [FIXED VERSION] Fetching stats directly from Supabase (NO edge function)...');
+          console.log('🔵 Component Version:', componentVersion);
 
           // ✅ Query student_profiles table directly - NO edge function call
           const { data: profile, error: profileError } = await supabase
@@ -623,7 +627,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
             })));
           }
 
-          console.log('✅ Real data fetched successfully from Supabase:', statsData);
+          console.log('✅ [LATEST VERSION] Real data fetched successfully from Supabase:', statsData);
         } catch (directQueryError: any) {
           console.error('❌ Direct query failed, using mock fallback:', directQueryError.message);
           
