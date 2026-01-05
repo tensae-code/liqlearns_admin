@@ -48,20 +48,80 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Get initial session
+    // Get initial session with error handling for invalid refresh tokens
     supabase.auth.getSession()
-      .then(({ data: { session } }) => {
+      .then(({ data: { session }, error }) => {
+        // CRITICAL FIX: Handle invalid refresh token errors
+        if (error) {
+          console.error('Session restoration error:', error);
+          
+          // If it's a refresh token error, clear all auth data
+          if (error.message?.includes('refresh') || error.message?.includes('Refresh Token')) {
+            console.log('🔄 Clearing invalid session data...');
+            
+            // Clear all Supabase-related localStorage items
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key && key.startsWith('sb-')) {
+                keysToRemove.push(key);
+              }
+            }
+            keysToRemove.forEach(key => localStorage.removeItem(key));
+            
+            // Clear sessionStorage
+            const sessionKeysToRemove = [];
+            for (let i = 0; i < sessionStorage.length; i++) {
+              const key = sessionStorage.key(i);
+              if (key && key.startsWith('sb-')) {
+                sessionKeysToRemove.push(key);
+              }
+            }
+            sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
+            
+            console.log('✅ Invalid session cleared - user needs to login again');
+          }
+          
+          // Set user to null regardless of error type
+          setUser(null);
+          setUserProfile(null);
+          setLoading(false);
+          return;
+        }
+        
         if (session?.user) {
           setUser(session.user);
           fetchUserProfile(session.user.id);
         }
+        setLoading(false);
+      })
+      .catch((err) => {
+        // Catch any unexpected errors
+        console.error('Unexpected session error:', err);
+        setUser(null);
+        setUserProfile(null);
         setLoading(false);
       });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event: string, session: Session | null) => {
-        if (session?.user) {
+        // CRITICAL FIX: Handle TOKEN_REFRESHED events with errors
+        if (event === 'TOKEN_REFRESHED' && !session) {
+          console.log('🔄 Token refresh failed - clearing session');
+          setUser(null);
+          setUserProfile(null);
+          
+          // Clear storage
+          const keysToRemove = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('sb-')) {
+              keysToRemove.push(key);
+            }
+          }
+          keysToRemove.forEach(key => localStorage.removeItem(key));
+        } else if (session?.user) {
           setUser(session.user);
           fetchUserProfile(session.user.id);
         } else {
