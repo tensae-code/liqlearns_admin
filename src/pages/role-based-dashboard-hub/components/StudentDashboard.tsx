@@ -72,6 +72,14 @@ import { resourceUnlockService, TutoringResource, StudentLevel } from '../../../
 import { marketplaceService, MarketplaceProduct, PaymentMethod, ProductCategory, CartItem, AuthorProfile } from '../../../services/marketplaceService';
 // End of added block
 
+// Add interface for user activities at the top with other interfaces
+interface UserActivity {
+  id: string;
+  title: string;
+  xpEarned: number;
+  createdAt: string;
+}
+
 // NEW: Add courseOptions constant at the top level
 const courseOptions = [
   {
@@ -457,6 +465,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
   });
   // End of added block
 
+  // NEW: Add user activities state
+  const [userActivities, setUserActivities] = useState<UserActivity[]>([]);
+
   // Helper functions for panel
   const openPanel = (title: string, component: React.ReactNode) => {
     setPanelContent({ title, component });
@@ -579,6 +590,18 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
             throw enrollError;
           }
 
+          // ✅ NEW: Query user_activities table directly for recent activities
+          const { data: activities, error: activitiesError } = await supabase
+            .from('user_activities')
+            .select('id, title, xp_earned, created_at')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(5);
+
+          if (activitiesError) {
+            console.warn('⚠️ Activities query error:', activitiesError);
+          }
+
           // ✅ Build stats object from direct Supabase queries
           statsData = {
             xp: profile?.xp || 0,
@@ -590,6 +613,16 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
             completed_courses: enrollments?.filter(e => e.is_completed).length || 0
           };
 
+          // ✅ Set activities from direct query
+          if (activities && activities.length > 0) {
+            setUserActivities(activities.map(act => ({
+              id: act.id,
+              title: act.title,
+              xpEarned: act.xp_earned,
+              createdAt: act.created_at
+            })));
+          }
+
           console.log('✅ Real data fetched successfully from Supabase:', statsData);
         } catch (directQueryError: any) {
           console.error('❌ Direct query failed, using mock fallback:', directQueryError.message);
@@ -597,13 +630,19 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
           // ✅ COMPREHENSIVE FALLBACK: Use mock data when queries fail
           statsData = {
             xp: 3400,
-            gold: 150,
+            gold: 1250,
             streak: 7,
             level: 3,
-            aura_points: 1250,
+            aura_points: 1500,
             enrolled_courses: 5,
             completed_courses: 2
           };
+          
+          // ✅ Mock activities fallback
+          setUserActivities([
+            { id: '1', title: 'Completed React Basics', xpEarned: 100, createdAt: new Date().toISOString() },
+            { id: '2', title: 'Maintained 7-day streak', xpEarned: 50, createdAt: new Date().toISOString() }
+          ]);
           
           console.log('📦 Using mock data:', statsData);
         }
@@ -1433,6 +1472,48 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
               </div>
             </div>
           </div>
+        </div>
+
+        {/* NEW: Recent Activity Section */}
+        <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
+          <div className="flex items-center space-x-2 sm:space-x-3 mb-4 sm:mb-6">
+            <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-green-500" />
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">Recent Activity</h2>
+          </div>
+          
+          {userActivities.length > 0 ? (
+            <div className="space-y-3">
+              {userActivities.map((activity) => (
+                <div 
+                  key={activity.id}
+                  className="flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg hover:shadow-md transition-shadow border border-gray-100"
+                >
+                  <div className="flex-1">
+                    <h3 className="font-medium text-gray-900 text-sm sm:text-base">{activity.title}</h3>
+                    <p className="text-xs text-gray-600 mt-1">
+                      {new Date(activity.createdAt).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded-full text-xs font-bold">
+                    <Star className="w-3 h-3" />
+                    +{activity.xpEarned} XP
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-600">No recent activity</p>
+              <p className="text-sm text-gray-500 mt-2">Complete lessons and quests to see your progress here!</p>
+            </div>
+          )}
         </div>
 
         {/* Recent Achievements */}
