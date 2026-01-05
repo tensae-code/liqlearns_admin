@@ -20,25 +20,47 @@ serve(async (req) => {
   }
 
   try {
+    // ✅ CRITICAL FIX: Use service role for bypassing RLS
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const url = new URL(req.url)
-    const userId = url.searchParams.get('id')
-
-    if (!userId) {
+    // ✅ NEW: Extract user from JWT token (recommended approach)
+    const authHeader = req.headers.get('Authorization')
+    
+    if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'User ID is required' }), 
+        JSON.stringify({ error: 'Missing Authorization header' }), 
         { 
-          status: 400, 
+          status: 401, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       )
     }
 
-    console.log(`🔵 Fetching stats for user: ${userId}`)
+    // ✅ NEW: Validate JWT and extract user
+    const token = authHeader.replace('Bearer ', '')
+    
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token)
+
+    if (authError || !user) {
+      console.error('❌ Auth validation failed:', authError?.message || 'Invalid token')
+      return new Response(
+        JSON.stringify({ error: 'Invalid user token' }), 
+        { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    // ✅ NEW: Use authenticated user ID from JWT
+    const userId = user.id
+    console.log(`🔵 Fetching stats for authenticated user: ${userId}`)
 
     // ✅ Query student_profiles table with correct column names
     const { data: profile, error: profileError } = await supabase
@@ -61,7 +83,7 @@ serve(async (req) => {
       )
     }
 
-    // ✅ Count enrollments from course_enrollments table (not enrollments)
+    // ✅ Count enrollments from course_enrollments table
     const { data: enrollments, error: enrollError } = await supabase
       .from('course_enrollments')
       .select('is_completed')
