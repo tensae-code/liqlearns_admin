@@ -123,6 +123,13 @@ const EmbeddedMarketplace: React.FC<EmbeddedMarketplaceProps> = ({
     } else {
       setSelectedTag(tagValue);
       setSelectedCategory('all');
+      // Scroll to products section after selecting tag
+      setTimeout(() => {
+        const productsSection = document.getElementById('products-section');
+        if (productsSection) {
+          productsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
     }
   };
 
@@ -323,7 +330,7 @@ const EmbeddedMarketplace: React.FC<EmbeddedMarketplaceProps> = ({
               onClick={() => handleTagFilter(tag.value)}
               className={`rounded-lg border p-4 transition-all hover:shadow-lg ${
                 selectedTag === tag.value
-                  ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20' :'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-orange-300'
+                  ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 ring-2 ring-orange-500' :'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-orange-300'
               }`}
             >
               <div className="flex items-center justify-between mb-2">
@@ -340,94 +347,161 @@ const EmbeddedMarketplace: React.FC<EmbeddedMarketplaceProps> = ({
                 </span>
               </div>
               <h3 className="font-semibold text-left text-sm">{tag.label}</h3>
-              <p className="text-xs text-gray-500 text-left">tagged items</p>
+              <p className="text-xs text-gray-500 text-left">
+                {selectedTag === tag.value ? 'Click to show all' : 'tagged items'}
+              </p>
             </button>
           ))}
         </div>
 
-        {/* Products Grid with Tag Badges */}
-        {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-          </div>
-        ) : products.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-            <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-700 mb-2">No products found</h3>
-            <p className="text-gray-600">Try adjusting your filters or search terms</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {products.map((product) => (
-              <div
-                key={product.id}
-                className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 hover:shadow-lg transition-all cursor-pointer"
-                onClick={() => {
-                  setSelectedProduct(product);
-                  setShowCheckout(true);
-                }}
-              >
-                {/* Tag Badges */}
-                {product.tags && product.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {product.tags.slice(0, 2).map((tag: string) => (
-                      <span 
-                        key={tag}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 text-xs font-medium"
-                      >
-                        <MarketplaceIcon type={tag} className="w-3 h-3" />
-                        {tag}
-                      </span>
-                    ))}
-                    {product.tags.length > 2 && (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs">
-                        +{product.tags.length - 2}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {/* Preview Image */}
-                {product.preview_image_url && (
-                  <img
-                    src={product.preview_image_url}
-                    alt={product.title}
-                    className="w-full h-40 object-cover rounded-lg mb-3"
-                  />
-                )}
-
-                {/* Product Info */}
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <h4 className="font-semibold text-lg line-clamp-2">{product.title}</h4>
-                  <MarketplaceIcon type={product.category} className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                </div>
-
-                <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-3">
-                  {product.description}
+        {/* Active Filter Banner with Back to Categories */}
+        {selectedTag !== 'all' && (
+          <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4 mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <MarketplaceIcon type={selectedTag} className="w-5 h-5 text-orange-600" />
+              <div>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  Viewing: {TAG_CATEGORIES.find(t => t.value === selectedTag)?.label || selectedTag}
                 </p>
-
-                {/* Price and Category */}
-                <div className="flex items-center justify-between">
-                  <span className="text-2xl font-bold text-orange-600">
-                    {product.price === 0 ? 'FREE' : `${product.price} AP`}
-                  </span>
-                  <span className="text-sm text-gray-500 capitalize">
-                    {categoryMapping[product.category]?.name || product.category}
-                  </span>
-                </div>
-
-                {/* Rating */}
-                {product.rating_average > 0 && (
-                  <div className="flex items-center gap-1 mt-2">
-                    <span className="text-yellow-500">⭐</span>
-                    <span className="text-sm font-medium">{product.rating_average.toFixed(1)}</span>
-                    <span className="text-xs text-gray-500">({product.total_sales} sales)</span>
-                  </div>
-                )}
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  {products.length} {products.length === 1 ? 'product' : 'products'} found
+                </p>
               </div>
-            ))}
+            </div>
+            <button
+              onClick={() => setSelectedTag('all')}
+              className="px-4 py-2 bg-white dark:bg-gray-800 border border-orange-300 text-orange-600 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-900/30 transition-colors text-sm font-medium flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back to All Categories
+            </button>
           </div>
         )}
+
+        {/* Products Section with ID for scrolling */}
+        <div id="products-section">
+          {/* Products Grid with Tag Badges */}
+          {loading ? (
+            <div className="flex justify-center items-center py-12">
+              <div className="text-center">
+                <Loader2 className="h-8 w-8 animate-spin text-orange-500 mx-auto mb-3" />
+                <p className="text-gray-600 dark:text-gray-400">
+                  {selectedTag !== 'all' 
+                    ? `Loading ${TAG_CATEGORIES.find(t => t.value === selectedTag)?.label} products...`
+                    : 'Loading products...'
+                  }
+                </p>
+              </div>
+            </div>
+          ) : products.length === 0 ? (
+            <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+              <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                {selectedTag !== 'all' 
+                  ? `No ${TAG_CATEGORIES.find(t => t.value === selectedTag)?.label} products found`
+                  : 'No products found'
+                }
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                {selectedTag !== 'all' ?'Try selecting a different category or search for something else' :'Try adjusting your filters or search terms'
+                }
+              </p>
+              {selectedTag !== 'all' && (
+                <button
+                  onClick={() => setSelectedTag('all')}
+                  className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium"
+                >
+                  View All Products
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Product Count Header */}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {selectedTag !== 'all' 
+                    ? `${TAG_CATEGORIES.find(t => t.value === selectedTag)?.label} Products (${products.length})`
+                    : `All Products (${products.length})`
+                  }
+                </h3>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {products.map((product) => (
+                  <div
+                    key={product.id}
+                    className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 hover:shadow-lg transition-all cursor-pointer"
+                    onClick={() => {
+                      setSelectedProduct(product);
+                      setShowCheckout(true);
+                    }}
+                  >
+                    {/* Tag Badges */}
+                    {product.tags && product.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {product.tags.slice(0, 2).map((tag: string) => (
+                          <span 
+                            key={tag}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 text-xs font-medium"
+                          >
+                            <MarketplaceIcon type={tag} className="w-3 h-3" />
+                            {tag}
+                          </span>
+                        ))}
+                        {product.tags.length > 2 && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs">
+                            +{product.tags.length - 2}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Preview Image */}
+                    {product.preview_image_url && (
+                      <img
+                        src={product.preview_image_url}
+                        alt={product.title}
+                        className="w-full h-40 object-cover rounded-lg mb-3"
+                      />
+                    )}
+
+                    {/* Product Info */}
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <h4 className="font-semibold text-lg line-clamp-2">{product.title}</h4>
+                      <MarketplaceIcon type={product.category} className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                    </div>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-3">
+                      {product.description}
+                    </p>
+
+                    {/* Price and Category */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-2xl font-bold text-orange-600">
+                        {product.price === 0 ? 'FREE' : `${product.price} AP`}
+                      </span>
+                      <span className="text-sm text-gray-500 capitalize">
+                        {categoryMapping[product.category]?.name || product.category}
+                      </span>
+                    </div>
+
+                    {/* Rating */}
+                    {product.rating_average > 0 && (
+                      <div className="flex items-center gap-1 mt-2">
+                        <span className="text-yellow-500">⭐</span>
+                        <span className="text-sm font-medium">{product.rating_average.toFixed(1)}</span>
+                        <span className="text-xs text-gray-500">({product.total_sales} sales)</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </main>
     </div>
   );

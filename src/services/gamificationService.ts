@@ -786,21 +786,35 @@ export const subscribeToNotifications = (
   userId: string,
   onNotification: (notification: any) => void
 ) => {
-  return supabase
-    .channel(`notifications:${userId}`)
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${userId}`,
-      },
-      (payload) => {
-        onNotification(payload.new);
-      }
-    )
-    .subscribe();
+  const channel = supabase.channel(`notifications:${userId}`);
+
+  // CRITICAL FIX: Set up ALL event handlers BEFORE calling .subscribe()
+  channel.on(
+    'postgres_changes',
+    {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'notifications',
+      filter: `user_id=eq.${userId}`,
+    },
+    (payload) => {
+      console.log('📨 New notification received:', payload);
+      onNotification(payload.new);
+    }
+  );
+
+  // Now subscribe after all handlers are set up
+  channel.subscribe((status) => {
+    console.log('🔔 Subscription status:', status);
+    
+    if (status === 'SUBSCRIBED') {
+      console.log('✅ Successfully subscribed to notifications channel');
+    } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+      console.error('❌ Subscription failed:', status);
+    }
+  });
+
+  return channel;
 };
 
 export const fetchNotifications = async (userId: string, limit = 20) => {
