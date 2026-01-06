@@ -53,8 +53,7 @@ import StatCardModal, { StatCardType } from '../../../components/StatCardModal';
 // NEW: Import checkout modals
 import CheckoutModal from '../../../components/CheckoutModal';
 import CheckoutSuccessModal from '../../../components/CheckoutSuccessModal';
-
-
+import EmbeddedMarketplace from '../../../components/EmbeddedMarketplace';
 
 import AchievementUnlockAnimation from '../../../components/AchievementUnlockAnimation';
 
@@ -1623,6 +1622,20 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
             )}
           </div>
         </div>
+
+        {/* NEW: Embedded Marketplace Section in Student Dashboard */}
+        <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
+          <div className="flex items-center space-x-2 sm:space-x-3 mb-4 sm:mb-6">
+            <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6 text-purple-500" />
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">Learning Marketplace</h2>
+          </div>
+          <EmbeddedMarketplace 
+            isEmbedded={true}
+            onAddToCart={handleAddToCart}
+            onCheckout={() => setShowCartModal(true)}
+            cartItemCount={cartItems.length}
+          />
+        </div>
       </div>
     );
   };
@@ -2644,189 +2657,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
     };
 
     return (
-      <div className="space-y-4 sm:space-y-6 pb-6 sm:pb-8 bg-gradient-to-br from-gray-50 via-orange-50 to-white min-h-screen p-3 sm:p-4 md:p-6 max-w-full overflow-x-hidden">
-        {/* Header with Cart Button */}
-        <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <Package className="w-6 h-6 sm:w-8 sm:h-8 text-orange-500" />
-              <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">Marketplace</h2>
-            </div>
-            
-            {/* MODIFIED: Cart Button (was Enroll) */}
-            <button 
-              onClick={() => setShowCartModal(true)}
-              className="flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-white font-semibold hover:bg-orange-600 transition-colors text-sm sm:text-base relative"
-            >
-              <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5" />
-              Cart
-              {cartItems.length > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
-                  {cartItems.length}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* MODIFIED: Enhanced Search with dropdown */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
-            {/* Search Mode Dropdown */}
-            <div className="flex items-center gap-2">
-              <select
-                value={searchMode}
-                onChange={(e) => setSearchMode(e.target.value as 'tool' | 'lesson' | 'item')}
-                className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 focus:ring-2 focus:ring-orange-500"
-              >
-                <option value="tool">By Tool</option>
-                <option value="lesson">By Lesson</option>
-                <option value="item">By Item</option>
-              </select>
-            </div>
-
-            {/* Search Input */}
-            <div className="relative flex-1 sm:flex-initial sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                value={marketplaceSearchTerm}
-                onChange={(e) => setMarketplaceSearchTerm(e.target.value)}
-                placeholder={`Search by ${searchMode}...`}
-                className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Category Cards Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3 sm:gap-4">
-            {filteredCategories.map((category) => {
-              const Icon = category.icon;
-              return (
-                <button
-                  key={category.id}
-                  onClick={() => handleCategoryClick(category.id)}
-                  className="group rounded-lg border border-gray-200 bg-white p-4 hover:shadow-lg transition-all hover:border-orange-500 text-left"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <Icon className={`h-6 w-6 ${category.color}`} />
-                    <span className="text-2xl font-bold text-orange-600">{category.count}</span>
-                  </div>
-                  <h4 className="font-semibold text-gray-900 mb-1">{category.name}</h4>
-                  <p className="text-xs text-gray-500">{category.description}</p>
-                </button>
-              );
-            })}
-          </div>
-
-          {filteredCategories.length === 0 && (
-            <div className="text-center py-8">
-              <Package className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-600">No categories found matching "{debouncedMarketplaceSearch}"</p>
-            </div>
-          )}
-        </div>
-
-        {/* Items Modal */}
-        {selectedMarketplaceCategory && (
-          <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold text-gray-900">
-                  {currentCategories.find(c => c.id === selectedMarketplaceCategory)?.name} Items
-                </h3>
-                <button 
-                  onClick={() => setSelectedMarketplaceCategory(null)}
-                  className="text-gray-500 hover:text-gray-700 transition-colors"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-
-              {itemsLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
-                  <span className="ml-2 text-gray-600">Loading items...</span>
-                </div>
-              ) : categoryItems.length === 0 ? (
-                <div className="text-center py-8">
-                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-600">No items available in this category</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {categoryItems.map((item) => (
-                    <div 
-                      key={item.id}
-                      className="rounded-lg border border-gray-200 p-4 hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="flex items-start gap-4">
-                        {item.previewImageUrl && (
-                          <div className="w-16 h-16 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
-                            <img 
-                              src={item.previewImageUrl} 
-                              alt={item.title}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        )}
-                        
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-gray-900 mb-1 line-clamp-1">
-                            {item.title}
-                          </h4>
-                          <p className="text-sm text-gray-600 mb-2 line-clamp-2">
-                            {item.description}
-                          </p>
-                          
-                          {/* NEW: Author Information */}
-                          {item.sellerName && (
-                            <button
-                              onClick={() => handleAuthorClick(item.sellerId)}
-                              className="flex items-center gap-2 mb-2 text-xs text-blue-600 hover:text-blue-800 transition-colors"
-                            >
-                              <Users className="w-3 h-3" />
-                              <span>By {item.sellerName}</span>
-                            </button>
-                          )}
-                          
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <span className="text-lg font-bold text-orange-600">
-                                {item.paymentMethod === 'aura_points' ? (
-                                  <span className="flex items-center gap-1">
-                                    <Award className="w-4 h-4" />
-                                    {item.price} Points
-                                  </span>
-                                ) : (
-                                  <span className="flex items-center gap-1">
-                                    <DollarSign className="w-4 h-4" />
-                                    ${item.price}
-                                  </span>
-                                )}
-                              </span>
-                              
-                              <span className="flex items-center gap-1 text-xs text-gray-500">
-                                <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                                {item.ratingAverage.toFixed(1)}
-                              </span>
-                            </div>
-                            
-                            {/* MODIFIED: Add to Cart button (was Buy) */}
-                            <button
-                              onClick={() => handleAddToCart(item.id)}
-                              className="rounded-lg bg-orange-500 px-4 py-2 text-white text-sm font-semibold hover:bg-orange-600 transition-colors flex items-center gap-2"
-                            >
-                              <Plus className="w-4 h-4" />
-                              Add
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+      <div className="space-y-4 sm:space-y-6 pb-6 sm:pb-8 max-w-full overflow-x-hidden">
+        <EmbeddedMarketplace 
+          isEmbedded={true}
+          onAddToCart={handleAddToCart}
+          onCheckout={() => setShowCartModal(true)}
+          cartItemCount={cartItems.length}
+        />
 
         {/* NEW: Cart Modal */}
         {showCartModal && (
@@ -2845,7 +2682,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
                 </button>
               </div>
 
-              {/* NEW: Search bar in cart */}
+              {/* Search bar in cart */}
               <div className="mb-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -2889,7 +2726,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
                             {cartItem.product?.description}
                           </p>
                           
-                          {/* Author info in cart */}
                           {cartItem.product?.sellerName && (
                             <button
                               onClick={() => {
@@ -2906,7 +2742,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
                           <span className="text-lg font-bold text-orange-600">
                             {cartItem.product?.paymentMethod === 'aura_points' 
                               ? `${cartItem.product.price} Points` 
-                              : `${cartItem.product?.price}`}
+                              : `$${cartItem.product?.price}`}
                           </span>
                         </div>
                         
@@ -2949,7 +2785,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
           </div>
         )}
 
-        {/* NEW: Author Shop Modal */}
+        {/* Author Shop Modal */}
         {showAuthorShop && (
           <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[80vh] overflow-y-auto">

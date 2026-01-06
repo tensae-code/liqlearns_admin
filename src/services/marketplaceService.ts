@@ -6,27 +6,25 @@ export type ProductStatus = 'draft' | 'active' | 'inactive' | 'sold_out';
 
 export interface MarketplaceProduct {
   id: string;
-  sellerId: string;
   title: string;
   description: string;
-  category: ProductCategory;
   price: number;
-  paymentMethod: PaymentMethod;
-  status: ProductStatus;
-  inventoryCount: number;
-  downloadsAllowed: boolean;
-  printable: boolean;
-  shareable: boolean;
-  accessExpiryDays: number;
-  fileUrl: string | null;
-  previewImageUrl: string | null;
-  ratingAverage: number;
-  totalSales: number;
-  createdAt: string;
-  updatedAt: string;
+  category: string;
   tags?: string[];
-  sellerName?: string;
-  sellerEmail?: string;
+  preview_image_url?: string;
+  rating_average: number;
+  total_sales: number;
+  file_url?: string;
+  payment_method: string;
+  seller_id: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  downloads_allowed: boolean;
+  shareable: boolean;
+  printable: boolean;
+  access_expiry_days: number;
+  inventory_count: number;
 }
 
 export interface ProductPurchase {
@@ -137,27 +135,25 @@ class MarketplaceService {
 
       return (data || []).map(product => ({
         id: product.id,
-        sellerId: product.seller_id,
         title: product.title,
         description: product.description,
-        category: product.category,
         price: parseFloat(product.price),
-        paymentMethod: product.payment_method,
-        status: product.status,
-        inventoryCount: product.inventory_count,
-        downloadsAllowed: product.downloads_allowed,
-        printable: product.printable,
-        shareable: product.shareable,
-        accessExpiryDays: product.access_expiry_days,
-        fileUrl: product.file_url,
-        previewImageUrl: product.preview_image_url,
-        ratingAverage: parseFloat(product.rating_average || '0'),
-        totalSales: product.total_sales || 0,
-        createdAt: product.created_at,
-        updatedAt: product.updated_at,
+        category: product.category,
         tags: product.tags || [],
-        sellerName: product.seller?.full_name,
-        sellerEmail: product.seller?.email
+        preview_image_url: product.preview_image_url,
+        rating_average: parseFloat(product.rating_average || '0'),
+        total_sales: product.total_sales || 0,
+        file_url: product.file_url,
+        payment_method: product.payment_method,
+        seller_id: product.seller_id,
+        status: product.status,
+        created_at: product.created_at,
+        updated_at: product.updated_at,
+        downloads_allowed: product.downloads_allowed,
+        shareable: product.shareable,
+        printable: product.printable,
+        access_expiry_days: product.access_expiry_days,
+        inventory_count: product.inventory_count,
       }));
     } catch (error: any) {
       console.error('Error fetching products:', error);
@@ -219,27 +215,25 @@ class MarketplaceService {
 
       const product: MarketplaceProduct = {
         id: productData.id,
-        sellerId: productData.seller_id,
         title: productData.title,
         description: productData.description,
-        category: productData.category,
         price: parseFloat(productData.price),
-        paymentMethod: productData.payment_method,
-        status: productData.status,
-        inventoryCount: productData.inventory_count,
-        downloadsAllowed: productData.downloads_allowed,
-        printable: productData.printable,
-        shareable: productData.shareable,
-        accessExpiryDays: productData.access_expiry_days,
-        fileUrl: productData.file_url,
-        previewImageUrl: productData.preview_image_url,
-        ratingAverage: parseFloat(productData.rating_average),
-        totalSales: productData.total_sales,
-        createdAt: productData.created_at,
-        updatedAt: productData.updated_at,
+        category: productData.category,
         tags: productData.tags || [],
-        sellerName: productData.seller?.full_name,
-        sellerEmail: productData.seller?.email
+        preview_image_url: productData.preview_image_url,
+        rating_average: parseFloat(productData.rating_average),
+        total_sales: productData.total_sales,
+        file_url: productData.file_url,
+        payment_method: productData.payment_method,
+        seller_id: productData.seller_id,
+        status: productData.status,
+        created_at: productData.created_at,
+        updated_at: productData.updated_at,
+        downloads_allowed: productData.downloads_allowed,
+        shareable: productData.shareable,
+        printable: productData.printable,
+        access_expiry_days: productData.access_expiry_days,
+        inventory_count: productData.inventory_count,
       };
 
       const reviews: ProductReview[] = (reviewsData || []).map(review => ({
@@ -448,26 +442,25 @@ class MarketplaceService {
         updatedAt: item.updated_at,
         product: item.product ? {
           id: item.product.id,
-          sellerId: item.product.seller_id,
           title: item.product.title,
           description: item.product.description,
-          category: item.product.category,
           price: parseFloat(item.product.price),
-          paymentMethod: item.product.payment_method,
+          category: item.product.category,
+          tags: item.product.tags || [],
+          preview_image_url: item.product.preview_image_url,
+          rating_average: parseFloat(item.product.rating_average),
+          total_sales: item.product.total_sales,
+          file_url: item.product.file_url,
+          payment_method: item.product.payment_method,
+          seller_id: item.product.seller_id,
           status: item.product.status,
-          inventoryCount: item.product.inventory_count,
-          downloadsAllowed: item.product.downloads_allowed,
-          printable: item.product.printable,
+          created_at: item.product.created_at,
+          updated_at: item.product.updated_at,
+          downloads_allowed: item.product.downloads_allowed,
           shareable: item.product.shareable,
-          accessExpiryDays: item.product.access_expiry_days,
-          fileUrl: item.product.file_url,
-          previewImageUrl: item.product.preview_image_url,
-          ratingAverage: parseFloat(item.product.rating_average),
-          totalSales: item.product.total_sales,
-          createdAt: item.product.created_at,
-          updatedAt: item.product.updated_at,
-          sellerName: item.product.seller?.full_name,
-          sellerEmail: item.product.seller?.email
+          printable: item.product.printable,
+          access_expiry_days: item.product.access_expiry_days,
+          inventory_count: item.product.inventory_count,
         } : undefined
       }));
     } catch (error: any) {
@@ -551,27 +544,25 @@ class MarketplaceService {
 
       return (data || []).map(product => ({
         id: product.id,
-        sellerId: product.seller_id,
         title: product.title,
         description: product.description,
-        category: product.category,
         price: parseFloat(product.price),
-        paymentMethod: product.payment_method,
-        status: product.status,
-        inventoryCount: product.inventory_count,
-        downloadsAllowed: product.downloads_allowed,
-        printable: product.printable,
-        shareable: product.shareable,
-        accessExpiryDays: product.access_expiry_days,
-        fileUrl: product.file_url,
-        previewImageUrl: product.preview_image_url,
-        ratingAverage: parseFloat(product.rating_average),
-        totalSales: product.total_sales,
-        createdAt: product.created_at,
-        updatedAt: product.updated_at,
+        category: product.category,
         tags: product.tags || [],
-        sellerName: product.seller?.full_name,
-        sellerEmail: product.seller?.email
+        preview_image_url: product.preview_image_url,
+        rating_average: parseFloat(product.rating_average),
+        total_sales: product.total_sales,
+        file_url: product.file_url,
+        payment_method: product.payment_method,
+        seller_id: product.seller_id,
+        status: product.status,
+        created_at: product.created_at,
+        updated_at: product.updated_at,
+        downloads_allowed: product.downloads_allowed,
+        shareable: product.shareable,
+        printable: product.printable,
+        access_expiry_days: product.access_expiry_days,
+        inventory_count: product.inventory_count,
       }));
     } catch (error: any) {
       console.error('Error fetching author products:', error);
@@ -596,27 +587,25 @@ class MarketplaceService {
 
       return (data || []).map(product => ({
         id: product.id,
-        sellerId: product.seller_id,
         title: product.title,
         description: product.description,
-        category: product.category,
         price: parseFloat(product.price),
-        paymentMethod: product.payment_method,
-        status: product.status,
-        inventoryCount: product.inventory_count,
-        downloadsAllowed: product.downloads_allowed,
-        printable: product.printable,
-        shareable: product.shareable,
-        accessExpiryDays: product.access_expiry_days,
-        fileUrl: product.file_url,
-        previewImageUrl: product.preview_image_url,
-        ratingAverage: parseFloat(product.rating_average),
-        totalSales: product.total_sales,
-        createdAt: product.created_at,
-        updatedAt: product.updated_at,
+        category: product.category,
         tags: product.tags || [],
-        sellerName: product.seller?.full_name,
-        sellerEmail: product.seller?.email
+        preview_image_url: product.preview_image_url,
+        rating_average: parseFloat(product.rating_average),
+        total_sales: product.total_sales,
+        file_url: product.file_url,
+        payment_method: product.payment_method,
+        seller_id: product.seller_id,
+        status: product.status,
+        created_at: product.created_at,
+        updated_at: product.updated_at,
+        downloads_allowed: product.downloads_allowed,
+        shareable: product.shareable,
+        printable: product.printable,
+        access_expiry_days: product.access_expiry_days,
+        inventory_count: product.inventory_count,
       }));
     } catch (error: any) {
       console.error('Error searching products by tags:', error);
@@ -726,4 +715,113 @@ export const getAvailableTags = async (): Promise<string[]> => {
   // Extract unique tags from all items
   const allTags = data?.flatMap(item => item.tags || []) || [];
   return Array.from(new Set(allTags)).sort();
+};
+
+/**
+ * Fetch marketplace products with optional tag filtering
+ */
+export const fetchMarketplaceProducts = async (
+  category?: string,
+  searchQuery?: string,
+  tags?: string[]
+): Promise<MarketplaceProduct[]> => {
+  try {
+    let query = supabase
+      .from('marketplace_products')
+      .select('*')
+      .eq('status', 'active')
+      .order('created_at', { ascending: false });
+
+    // Filter by category
+    if (category && category !== 'all') {
+      query = query.eq('category', category);
+    }
+
+    // Filter by search query
+    if (searchQuery && searchQuery.trim()) {
+      query = query.or(`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`);
+    }
+
+    // Filter by tags (if provided)
+    if (tags && tags.length > 0) {
+      query = query.contains('tags', tags);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching marketplace products:', error);
+      throw new Error(`Failed to fetch marketplace products: ${error.message}`);
+    }
+
+    return data || [];
+  } catch (err) {
+    console.error('Unexpected error in fetchMarketplaceProducts:', err);
+    throw err;
+  }
+};
+
+/**
+ * Get unique tags from marketplace products
+ */
+export const getMarketplaceTags = async (): Promise<string[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('marketplace_products')
+      .select('tags')
+      .eq('status', 'active');
+
+    if (error) {
+      console.error('Error fetching marketplace tags:', error);
+      throw new Error(`Failed to fetch tags: ${error.message}`);
+    }
+
+    // Extract unique tags from all products
+    const allTags = new Set<string>();
+    data?.forEach((product) => {
+      if (product.tags && Array.isArray(product.tags)) {
+        product.tags.forEach((tag: string) => allTags.add(tag));
+      }
+    });
+
+    return Array.from(allTags).sort();
+  } catch (err) {
+    console.error('Unexpected error in getMarketplaceTags:', err);
+    throw err;
+  }
+};
+
+/**
+ * Get category counts including tag-based categorization
+ */
+export const getMarketplaceCategoryCounts = async (): Promise<{
+  category: string;
+  count: number;
+}[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('marketplace_products')
+      .select('category')
+      .eq('status', 'active');
+
+    if (error) {
+      console.error('Error fetching category counts:', error);
+      throw new Error(`Failed to fetch category counts: ${error.message}`);
+    }
+
+    // Count products per category
+    const categoryCounts = data?.reduce((acc: { [key: string]: number }, product) => {
+      const category = product.category || 'other';
+      acc[category] = (acc[category] || 0) + 1;
+      return acc;
+    }, {} as { [key: string]: number });
+
+    return Object.entries(categoryCounts || {}).map(([category, count]) => ({
+      category,
+      count,
+    }));
+  } catch (err) {
+    console.error('Unexpected error in getMarketplaceCategoryCounts:', err);
+    throw err;
+  }
 };

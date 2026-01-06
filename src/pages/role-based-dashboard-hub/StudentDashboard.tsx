@@ -5,9 +5,9 @@ import { CourseSyllabus, CourseAttendance, CourseOutcome, StudentOutcomeProgress
 import CourseSelectionCard from './components/CourseSelectionCard';
 import StreakGiftAnimation from './components/StreakGiftAnimation';
 import { useAuth } from '../../contexts/AuthContext';
-import { BookOpen, Calendar, Target, Zap, ArrowLeft, ShoppingCart } from 'lucide-react';
+import { BookOpen, Calendar, Target, Zap, ArrowLeft } from 'lucide-react';
 import CircularProgress from './components/CircularProgress';
-import MarketplaceGrid from '@/features/marketplace/components/MarketplaceGrid';
+import EmbeddedMarketplace from '../../components/EmbeddedMarketplace';
 import { useNavigate } from 'react-router-dom';
 
 
@@ -428,24 +428,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
     </div>
   );
 
-  // MODIFIED: Update renderDashboardSection to add enrollment stats and continue learning placeholders
+  // MODIFIED: Update renderDashboardSection to embed marketplace directly
   const renderDashboardSection = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-orange-50 to-white p-4 sm:p-6 lg:p-8">
-        {/* NEW: Title with Enroll Button */}
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Choose Your Learning Path</h2>
-          {user?.role === 'student' && (
-            <button
-              onClick={() => navigate('/marketplace-hub')}
-              className="flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-white font-semibold hover:bg-orange-600 transition-colors shadow-sm"
-            >
-              <ShoppingCart className="h-5 w-5" />
-              Enroll
-            </button>
-          )}
-        </div>
-
         {/* Stats Cards Grid with hover effects */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* Enrolled Courses Stat */}
@@ -497,24 +483,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
           </div>
         </div>
 
-        {/* Continue Learning Section */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm mb-8">
-          <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <BookOpen className="w-6 h-6 text-orange-500" />
-            Continue Learning
-          </h3>
-          <div className="text-center py-8">
-            <p className="text-gray-500 mb-4">No courses yet. Click Enroll to start!</p>
-            <button
-              onClick={() => navigate('/marketplace-hub')}
-              className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-6 py-3 text-white font-semibold hover:bg-orange-600 transition-colors"
-            >
-              <ShoppingCart className="h-5 w-5" />
-              Browse Courses
-            </button>
-          </div>
-        </div>
-
         {/* Day Streak Card */}
         <div 
           className="card-hover bg-gradient-to-br from-orange-500 to-yellow-500 rounded-xl shadow-lg p-6 cursor-pointer mb-8"
@@ -534,9 +502,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
           </div>
         </div>
 
-        {/* Marketplace Section with card hover */}
+        {/* Embedded Marketplace Section */}
         <div className="mt-12">
-          <MarketplaceGrid />
+          <EmbeddedMarketplace isEmbedded={true} />
         </div>
       </div>
     );
