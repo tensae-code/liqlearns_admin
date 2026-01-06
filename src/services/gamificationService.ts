@@ -788,7 +788,7 @@ export const subscribeToNotifications = (
 ) => {
   const channel = supabase.channel(`notifications:${userId}`);
 
-  // CRITICAL FIX: Set up ALL event handlers BEFORE calling .subscribe()
+  // Set up the postgres_changes event handler
   channel.on(
     'postgres_changes',
     {
@@ -803,15 +803,10 @@ export const subscribeToNotifications = (
     }
   );
 
-  // Now subscribe after all handlers are set up
+  // Subscribe and return the channel for proper cleanup
+  // The subscribe callback receives the status which we can use for connection monitoring
   channel.subscribe((status) => {
-    console.log('🔔 Subscription status:', status);
-    
-    if (status === 'SUBSCRIBED') {
-      console.log('✅ Successfully subscribed to notifications channel');
-    } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-      console.error('❌ Subscription failed:', status);
-    }
+    console.log('🔔 Realtime channel status:', status);
   });
 
   return channel;

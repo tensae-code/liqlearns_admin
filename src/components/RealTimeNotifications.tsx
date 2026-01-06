@@ -23,50 +23,73 @@ const RealTimeNotifications: React.FC = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showPanel, setShowPanel] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [connectionStatus, setConnectionStatus] = useState<string>('disconnected');
+  const [connectionStatus, setConnectionStatus] = useState<string>('connecting');
 
   useEffect(() => {
     if (!user) return;
 
     loadNotifications();
 
-    console.log('🔌 Attempting to connect to realtime channel...');
+    console.log('🔌 Setting up realtime notifications channel...');
     
-    // CRITICAL FIX: Store channel reference and set up proper cleanup
+    // Subscribe to notifications
     const channel = subscribeToNotifications(user.id, (notification) => {
       console.log('📨 New notification received:', notification);
       setNotifications((prev) => [notification, ...prev]);
       setUnreadCount((prev) => prev + 1);
       showToast(notification);
+      setConnectionStatus('connected');
     });
 
-    // Handle connection status updates
-    const handleChannelStatus = (status: string) => {
-      console.log('🔴 Subscription status:', status);
-      setConnectionStatus(status);
+    // Monitor channel state changes with improved detection
+    channel.on('system', {}, (payload) => {
+      console.log('🔄 Channel status update:', payload);
       
-      if (status === 'SUBSCRIBED') {
-        console.log('✅ Real-time connection established');
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        console.error('❌ Real-time connection failed');
-        // Attempt to reconnect after 5 seconds
-        setTimeout(() => {
-          if (user) {
-            console.log('🔄 Attempting to reconnect...');
-            channel.subscribe();
-          }
-        }, 5000);
-      }
-    };
-
-    // Subscribe to channel status changes
-    const statusListener = channel.on('system', {}, (payload: any) => {
-      if (payload.status) {
-        handleChannelStatus(payload.status);
+      // Detect successful subscription
+      if (payload.extension === 'postgres_changes') {
+        if (payload.status === 'ok') {
+          setConnectionStatus('connected');
+          console.log('✅ Real-time connection established');
+        }
       }
     });
+
+    // Improved connection verification with proper state checking
+    const statusTimer = setTimeout(() => {
+      // Check actual channel state
+      const state = channel.state;
+      console.log('🔍 Verifying channel state:', state);
+      
+      if (state === 'joined' || state === 'connected') {
+        setConnectionStatus('connected');
+        console.log('✅ Connection verified as active');
+      } else if (state === 'closed' || state === 'errored') {
+        setConnectionStatus('error');
+        console.error('❌ Connection failed:', state);
+      } else {
+        // Still connecting
+        console.log('⏱️ Still establishing connection...');
+      }
+    }, 2000); // Reduced timeout for faster feedback
+
+    // Secondary verification for stubborn "connecting" states
+    const fallbackTimer = setTimeout(() => {
+      if (connectionStatus === 'connecting') {
+        const state = channel.state;
+        // If we're still showing "connecting" but the channel is actually joined
+        if (state === 'joined') {
+          setConnectionStatus('connected');
+          console.log('✅ Late connection verification - connected');
+        } else {
+          setConnectionStatus('error');
+          console.error('❌ Connection timeout - failed to establish');
+        }
+      }
+    }, 5000);
 
     return () => {
+      clearTimeout(statusTimer);
+      clearTimeout(fallbackTimer);
       console.log('🔌 Disconnecting from realtime channel');
       channel.unsubscribe();
       setConnectionStatus('disconnected');
@@ -143,10 +166,23 @@ const RealTimeNotifications: React.FC = () => {
 
   return (
     <>
-      {/* Add connection status indicator for debugging */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="fixed bottom-4 right-4 px-3 py-2 bg-gray-800 text-white text-xs rounded z-50">
-          Realtime: {connectionStatus}
+      {/* Enhanced connection status indicator with auto-hide on success */}
+      {connectionStatus !== 'connected' && (
+        <div className={`fixed bottom-4 right-4 px-4 py-3 text-white text-sm rounded-lg shadow-lg z-50 flex items-center gap-2 ${
+          connectionStatus === 'error' ? 'bg-red-600' : 'bg-blue-600'
+        }`}>
+          {connectionStatus === 'connecting' && (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+              <span>Connecting to real-time updates...</span>
+            </>
+          )}
+          {connectionStatus === 'error' && (
+            <>
+              <span className="text-lg">⚠️</span>
+              <span>Failed to connect. Retrying...</span>
+            </>
+          )}
         </div>
       )}
 
@@ -161,6 +197,9 @@ const RealTimeNotifications: React.FC = () => {
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
+        {connectionStatus === 'connected' && (
+          <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+        )}
       </button>
 
       {/* Notification Panel */}
@@ -168,7 +207,15 @@ const RealTimeNotifications: React.FC = () => {
         <div className="absolute right-0 top-16 w-96 bg-white rounded-lg shadow-2xl z-50 max-h-[600px] overflow-hidden flex flex-col">
           {/* Header */}
           <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="font-bold text-lg">Notifications</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-lg">Notifications</h3>
+              {connectionStatus === 'connected' && (
+                <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                  Live
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               {unreadCount > 0 && (
                 <button
@@ -193,6 +240,7 @@ const RealTimeNotifications: React.FC = () => {
               <div className="p-8 text-center text-gray-500">
                 <Bell className="w-12 h-12 mx-auto mb-2 text-gray-300" />
                 <p>No notifications yet</p>
+                <p className="text-xs mt-2">You'll be notified in real-time</p>
               </div>
             ) : (
               notifications.map((notification) => (

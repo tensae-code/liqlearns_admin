@@ -3,8 +3,9 @@ import { Trophy, Target, Zap, Star, TrendingUp, Calendar, Play, BookMarked, Head
 import { Search, Filter, ShoppingCart, Award, Download } from 'lucide-react';
 import { Video } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
-// Add this block - Import Flame icon
+// Add this block - Import Flame icon and toast
 import { Flame } from 'lucide-react';
+import toast, { Toaster } from 'react-hot-toast';
 import { useAuth } from '../../../contexts/AuthContext';
 // ✅ CRITICAL FIX: Import ONLY direct Supabase client - NO edge function dependencies
 import { supabase } from '../../../lib/supabase';
@@ -500,6 +501,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
   });
   // End of added block
 
+  // Add this block - Previous stats tracking for change detection
+  const [previousStats, setPreviousStats] = useState<StudentStats | null>(null);
+  const [showLevelUpAnimation, setShowLevelUpAnimation] = useState(false);
+  const [newLevelAchieved, setNewLevelAchieved] = useState<number>(1);
+  // End of added block
+
   // NEW: Add user activities state
   const [userActivities, setUserActivities] = useState<UserActivity[]>([]);
 
@@ -638,6 +645,19 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
               completedCourses: statsData.completed_courses || 0
             });
 
+            // Add this block - Store initial stats for comparison
+            setPreviousStats({
+              totalXP: statsData.xp || 0,
+              totalLessons: statsData.enrolled_courses || 0,
+              currentStreak: statsData.streak || 0,
+              level: statsData.level || 1,
+              auraPoints: statsData.aura_points || 0,
+              gold: statsData.gold || 0,
+              enrolledCourses: statsData.enrolled_courses || 0,
+              completedCourses: statsData.completed_courses || 0
+            });
+            // End of added block
+
             setConnectionStatus('online');
             setPollingStatus('active');
             setLastPollTime(new Date());
@@ -690,7 +710,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
           commissionsData,
           payoutsData,
           downlineData,
-          earningsData
+          earningsData,
+          // Add this line - Load user activities
+          userActivitiesData
         ] = await Promise.all([
           studentDashboardService.getSkillProgress(user.id).catch(() => []),
           studentDashboardService.getRecentAchievements(user.id, 3).catch(() => []),
@@ -706,7 +728,30 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
           mlmEarnersService.getCommissions(user.id, 10).catch(() => []),
           mlmEarnersService.getPayoutRequests(user.id).catch(() => []),
           mlmEarnersService.getDownlineMembers(user.id).catch(() => []),
-          mlmEarnersService.getEarningsBreakdown(user.id).catch(() => ({ totalEarnings: 0, availableBalance: 0, pendingBalance: 0, withdrawnTotal: 0 }))
+          mlmEarnersService.getEarningsBreakdown(user.id).catch(() => ({ totalEarnings: 0, availableBalance: 0, pendingBalance: 0, withdrawnTotal: 0 })),
+          // Add this line - Load user activities
+          (async () => {
+            try {
+              const { data, error } = await supabase
+                .from('user_activities')
+                .select('id, title, xp_earned, created_at')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false })
+                .limit(10);
+              
+              if (error) throw error;
+              
+              return (data || []).map((activity: any) => ({
+                id: activity.id,
+                title: activity.title,
+                xpEarned: activity.xp_earned,
+                createdAt: activity.created_at
+              }));
+            } catch (err) {
+              console.error('Error loading activities:', err);
+              return [];
+            }
+          })()
         ]);
 
         if (isMounted) {
@@ -725,6 +770,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
           setPayoutRequests(payoutsData);
           setDownlineMembers(downlineData);
           setEarningsBreakdown(earningsData);
+          // Add this line - Set user activities
+          setUserActivities(userActivitiesData);
 
           // Streak animation only for students
           if (role === 'student') {
@@ -753,7 +800,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
       }
     };
 
-    // ✅ NEW: Polling function for live updates (student role only)
+    // ✅ NEW: Polling function for live updates with change detection
     const pollForUpdates = async () => {
       if (!isMounted || !user?.id || role !== 'student') return;
 
@@ -778,7 +825,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
         const statsData = await response.json();
         
         if (isMounted) {
-          setStats({
+          const newStats = {
             totalXP: statsData.xp || 0,
             totalLessons: statsData.enrolled_courses || 0,
             currentStreak: statsData.streak || 0,
@@ -787,11 +834,113 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
             gold: statsData.gold || 0,
             enrolledCourses: statsData.enrolled_courses || 0,
             completedCourses: statsData.completed_courses || 0
-          });
+          };
+
+          // Add this block - Detect changes and show toast notifications
+          if (previousStats) {
+            // XP increase
+            if (newStats.totalXP > previousStats.totalXP) {
+              const xpGain = newStats.totalXP - previousStats.totalXP;
+              toast.success(`🎉 +${xpGain} XP earned!`, {
+                duration: 4000,
+                icon: '⚡',
+                style: {
+                  background: '#10B981',
+                  color: '#fff',
+                  fontWeight: 'bold'
+                }
+              });
+            }
+
+            // Level up
+            if (newStats.level > previousStats.level) {
+              setNewLevelAchieved(newStats.level);
+              setShowLevelUpAnimation(true);
+              toast.success(`🎊 Level Up! You reached Level ${newStats.level}!`, {
+                duration: 6000,
+                icon: '🏆',
+                style: {
+                  background: '#F59E0B',
+                  color: '#fff',
+                  fontWeight: 'bold',
+                  fontSize: '16px'
+                }
+              });
+            }
+
+            // Aura points change
+            if (newStats.auraPoints > previousStats.auraPoints) {
+              const pointsGain = newStats.auraPoints - previousStats.auraPoints;
+              toast.success(`🔥 +${pointsGain} Aura Points!`, {
+                duration: 4000,
+                icon: '✨',
+                style: {
+                  background: '#F97316',
+                  color: '#fff',
+                  fontWeight: 'bold'
+                }
+              });
+            }
+
+            // Streak increase
+            if (newStats.currentStreak > previousStats.currentStreak) {
+              toast.success(`🔥 ${newStats.currentStreak} day streak! Keep it up!`, {
+                duration: 4000,
+                icon: '⚡',
+                style: {
+                  background: '#8B5CF6',
+                  color: '#fff',
+                  fontWeight: 'bold'
+                }
+              });
+            }
+          }
+          // End of added block
+
+          setStats(newStats);
+          setPreviousStats(newStats);
 
           setPollingStatus('active');
           setConnectionStatus('online');
           setLastPollTime(new Date());
+
+          // Add this block - Reload activities on each poll
+          try {
+            const { data: activitiesData } = await supabase
+              .from('user_activities')
+              .select('id, title, xp_earned, created_at')
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false })
+              .limit(10);
+            
+            if (activitiesData) {
+              const newActivities = activitiesData.map((activity: any) => ({
+                id: activity.id,
+                title: activity.title,
+                xpEarned: activity.xp_earned,
+                createdAt: activity.created_at
+              }));
+
+              // Check for new activities and show toast
+              if (userActivities.length > 0 && newActivities.length > userActivities.length) {
+                const latestActivity = newActivities[0];
+                toast.success(`📝 New Activity: ${latestActivity.title}`, {
+                  duration: 5000,
+                  icon: '🎯',
+                  style: {
+                    background: '#3B82F6',
+                    color: '#fff',
+                    fontWeight: 'bold'
+                  }
+                });
+              }
+
+              setUserActivities(newActivities);
+            }
+          } catch (err) {
+            console.error('Error loading activities:', err);
+          }
+          // End of added block
         }
       } catch (err: any) {
         console.error('Polling error:', err);
@@ -3750,6 +3899,80 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Add this block - Toast container */}
+      <Toaster 
+        position="top-right"
+        reverseOrder={false}
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#fff',
+            color: '#363636',
+            padding: '16px',
+            borderRadius: '12px',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+            maxWidth: '400px'
+          }
+        }}
+      />
+      {/* End of added block */}
+
+      {/* Add this block - Level Up Animation Modal */}
+      {showLevelUpAnimation && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-75 backdrop-blur-sm">
+          <div className="relative">
+            {/* Confetti-like particles */}
+            <div className="absolute inset-0 pointer-events-none">
+              {Array.from({ length: 30 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute animate-bounce"
+                  style={{
+                    left: `${Math.random() * 100}%`,
+                    top: `${Math.random() * 100}%`,
+                    animationDelay: `${Math.random() * 2}s`,
+                    animationDuration: `${1 + Math.random() * 2}s`
+                  }}
+                >
+                  {['🎉', '✨', '⚡', '🏆', '🔥', '💫'][Math.floor(Math.random() * 6)]}
+                </div>
+              ))}
+            </div>
+
+            {/* Main level up card */}
+            <div className="bg-white rounded-3xl p-8 text-center shadow-2xl transform scale-110 animate-pulse">
+              <div className="mb-6">
+                <Trophy className="w-24 h-24 text-yellow-500 mx-auto mb-4 animate-bounce" />
+                <h2 className="text-4xl font-bold text-gray-900 mb-2">LEVEL UP!</h2>
+                <p className="text-6xl font-bold text-orange-600 mb-2">{newLevelAchieved}</p>
+                <p className="text-xl text-gray-600">
+                  You've reached Level {newLevelAchieved}!
+                </p>
+              </div>
+
+              <div className="space-y-3 mb-6">
+                <div className="flex items-center justify-center gap-3 bg-orange-50 py-3 px-6 rounded-lg">
+                  <Flame className="w-6 h-6 text-orange-500" />
+                  <span className="font-bold text-gray-900">+50 Aura Points</span>
+                </div>
+                <div className="flex items-center justify-center gap-3 bg-yellow-50 py-3 px-6 rounded-lg">
+                  <Star className="w-6 h-6 text-yellow-500" />
+                  <span className="font-bold text-gray-900">+100 XP Bonus</span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowLevelUpAnimation(false)}
+                className="px-8 py-3 bg-gradient-to-r from-orange-500 to-yellow-500 text-white rounded-xl font-bold hover:from-orange-600 hover:to-yellow-600 transition-all transform hover:scale-105 shadow-lg"
+              >
+                Awesome! 🎊
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* End of added block */}
+
       {/* Streak Animation - Now properly rendered */}
       {showStreakAnimation && (
         <StreakGiftAnimation

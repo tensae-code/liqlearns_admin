@@ -1,194 +1,250 @@
-# Real-Time Connection Debugging Guide
+# Real-Time Notifications Connection Debugging Guide
 
-## Problem
-Real-time updates show "Live updates active" on Rocket AI preview but "offline" on deployed website.
+## Problem: Real-Time Connection Failed
 
-## Root Causes
+This guide helps diagnose and fix real-time notification connection failures in Supabase Realtime.
 
-### 1. Environment Variable Issues
-**Symptom**: Connection fails immediately on deployed site
-**Cause**: Missing or incorrect `VITE_SUPABASE_URL` or `VITE_SUPABASE_ANON_KEY`
+---
 
-**Fix**:
-1. Verify environment variables on your deployment platform (Vercel/Netlify/etc)
-2. Ensure variable names match exactly: `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
-3. Rebuild and redeploy after setting variables
+## Root Causes & Solutions
 
-### 2. Supabase Realtime Not Enabled
-**Symptom**: WebSocket connection times out or returns CHANNEL_ERROR
-**Cause**: Realtime feature not enabled in Supabase project
+### 1. Realtime Not Enabled for `notifications` Table
 
-**Fix**:
-1. Go to Supabase Dashboard → Project Settings → API
-2. Scroll to "Realtime" section
-3. Ensure "Enable Realtime" is toggled ON
-4. Check that your table (`student_profiles`) has "Realtime" enabled
+**Most Common Issue**: The `notifications` table must have Realtime explicitly enabled in Supabase.
 
-### 3. Domain Whitelist Restrictions
-**Symptom**: Connection works on localhost but fails on deployed domain
-**Cause**: Deployed domain not whitelisted in Supabase
+**Fix in Supabase Dashboard**:
+1. Go to Database → Replication
+2. Find the `notifications` table
+3. Enable replication for this table
+4. Click "Save" or "Enable Replication"
 
-**Fix**:
-1. Go to Supabase Dashboard → Authentication → URL Configuration
-2. Add your deployed domain to "Site URL" and "Redirect URLs"
-3. Example: `https://yourdomain.com` or `https://your-app.vercel.app`
+**Verify via SQL**:
+```sql
+-- Check if realtime is enabled for notifications table
+SELECT schemaname, tablename, 
+       'INSERT' = ANY(string_to_array(substring(obj_description(c.oid), 'replica_identity:\s*(\w+)'), ',')) as has_insert_trigger
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relname = 'notifications' AND n.nspname = 'public';
 
-### 4. WebSocket Protocol Mismatch
-**Symptom**: Browser console shows WebSocket connection refused
-**Cause**: HTTPS/WSS protocol mismatch
-
-**Fix**:
-- Ensure your Supabase URL uses `https://` (not `http://`)
-- Browser automatically converts `https://` to `wss://` for WebSocket
-- Mixed content (HTTP page trying WSS connection) will fail
-
-### 5. Network/Firewall Restrictions
-**Symptom**: Connection works on some networks but not others
-**Cause**: Corporate firewall or network policy blocking WebSocket
-
-**Fix**:
-- Test on different networks (mobile data, different WiFi)
-- Check if polling fallback activates (indicated by "Using manual refresh")
-- Contact network admin if corporate firewall is blocking WebSocket
-
-## Debugging Steps
-
-### Step 1: Check Browser Console
-Open browser developer tools (F12) and look for:
-```
-🔴 Setting up real-time subscription for user: [user-id]
-🌐 Environment: production
-🔗 Supabase URL: [your-supabase-url]
-🔌 WebSocket supported: true
+-- Enable realtime for notifications table (if not enabled)
+ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
 ```
 
-### Step 2: Verify Connection Status
-Look for status updates in console:
-```
-✅ Real-time connection established successfully
-🌐 Connected at: [timestamp]
-```
+---
 
-If you see errors:
-```
-❌ Real-time connection failed: CHANNEL_ERROR
-🔗 Supabase URL: [url]
-🔌 WebSocket support: true
+### 2. Row Level Security (RLS) Blocking Access
+
+**Issue**: Even with Realtime enabled, RLS policies can block real-time subscriptions.
+
+**Check Current RLS Policies**:
+```sql
+-- View existing RLS policies on notifications table
+SELECT * FROM pg_policies WHERE tablename = 'notifications';
 ```
 
-### Step 3: Use Debug Panel
-On the deployed site, expand "Connection Details (for debugging)" to see:
-- Environment (should be "production")
-- Supabase URL (should match your project)
-- WebSocket Support (should be "Yes")
-- Attempt Count (number of connection attempts)
-- Last Error (specific error message)
+**Required RLS Policy for Realtime**:
+```sql
+-- Enable RLS
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
-### Step 4: Test WebSocket Support
-Run this in browser console on your deployed site:
-```javascript
-const ws = new WebSocket('wss://echo.websocket.org');
-ws.onopen = () => console.log('✅ WebSocket WORKS');
-ws.onerror = () => console.error('❌ WebSocket BLOCKED');
+-- Allow users to receive their own notifications via Realtime
+CREATE POLICY "Users can receive their own notifications via Realtime"
+ON notifications
+FOR SELECT
+USING (auth.uid() = user_id);
+
+-- Policy for inserting notifications (system/admin only)
+CREATE POLICY "System can insert notifications"
+ON notifications
+FOR INSERT
+WITH CHECK (true);  -- Adjust based on your security requirements
 ```
 
-### Step 5: Verify Supabase Realtime
-Test direct Supabase connection:
-```javascript
-const { createClient } = supabase;
-const client = createClient('YOUR_URL', 'YOUR_KEY');
-const channel = client.channel('test');
-channel.subscribe((status) => console.log('Status:', status));
+---
+
+### 3. Incorrect Channel Filter Syntax
+
+**Issue**: Filter syntax must be exact for postgres_changes.
+
+**Correct Syntax**:
+```typescript
+// ✅ CORRECT - Simple equality filter
+filter: `user_id=eq.${userId}`
+
+// ❌ INCORRECT - Wrong operators
+filter: `user_id=${userId}`  // Missing =eq.
+filter: `user_id==eq.${userId}`  // Double equals
+filter: `user_id==${userId}`  // Wrong format
 ```
 
-## Solutions by Status Message
+---
 
-### "Live updates active" ✅
-Everything working correctly. No action needed.
+### 4. Channel Subscription Lifecycle Issues
 
-### "Connecting..." 🟡 (stays yellow)
-**Issue**: WebSocket handshake not completing
-**Solutions**:
-1. Check Supabase Realtime is enabled
-2. Verify environment variables are correct
-3. Check domain is whitelisted
-4. Wait for retry attempts (3 total)
+**Issue**: Not properly managing channel state and cleanup.
 
-### "Using manual refresh" 🔴
-**Issue**: WebSocket failed, using polling fallback
-**Solutions**:
-1. Enable Supabase Realtime
-2. Check firewall/network restrictions
-3. Verify environment variables
-4. Polling will update every 30 seconds (slower but functional)
+**Solution Already Implemented** in gamificationService.ts:
+```typescript
+// ✅ Proper channel subscription with status monitoring
+const channel = supabase.channel(`notifications:${userId}`);
+
+channel.on('postgres_changes', { /* config */ }, callback);
+
+// Subscribe with status callback
+channel.subscribe((status) => {
+  console.log('🔔 Realtime channel status:', status);
+  // status can be: 'SUBSCRIBED', 'TIMED_OUT', 'CLOSED', 'CHANNEL_ERROR'
+});
+
+// Proper cleanup in useEffect
+return () => {
+  channel.unsubscribe();
+};
+```
+
+---
+
+## Testing Real-Time Connection
+
+### Manual Test in Supabase SQL Editor
+
+```sql
+-- 1. Insert a test notification for your user
+INSERT INTO notifications (user_id, type, title, message, data, is_read)
+VALUES (
+  'YOUR_USER_ID_HERE',  -- Replace with your actual user ID
+  'test',
+  'Test Notification',
+  'This is a test notification',
+  '{"test": true}'::jsonb,
+  false
+);
+
+-- 2. Check if it was inserted
+SELECT * FROM notifications WHERE user_id = 'YOUR_USER_ID_HERE' ORDER BY created_at DESC LIMIT 1;
+```
+
+If your browser console shows the notification after insert, Realtime is working!
+
+---
+
+## Debugging Tools
+
+### Browser Console Monitoring
+
+Add these logs to your RealTimeNotifications component:
+
+```typescript
+useEffect(() => {
+  if (!user) return;
+
+  console.log('🔌 Initializing Realtime for user:', user.id);
+
+  const channel = subscribeToNotifications(user.id, (notification) => {
+    console.log('📨 Notification received:', notification);
+    console.log('📊 Channel state:', channel.state);
+  });
+
+  // Monitor channel state changes
+  const stateChangeHandler = (state: string) => {
+    console.log('🔄 Channel state changed:', state);
+  };
+
+  // Add connection monitoring
+  const connectionCheckInterval = setInterval(() => {
+    console.log('📡 Current channel state:', channel.state);
+    console.log('📡 Connection status:', channel.socket?.connectionState());
+  }, 5000);
+
+  return () => {
+    clearInterval(connectionCheckInterval);
+    console.log('🔌 Disconnecting from realtime channel');
+    channel.unsubscribe();
+  };
+}, [user]);
+```
+
+---
+
+## Supabase Client Configuration
+
+### Verify Supabase Client Setup
+
+Check your `lib/supabase.ts`:
+
+```typescript
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  realtime: {
+    // Optional: Configure Realtime parameters
+    params: {
+      eventsPerSecond: 10,  // Rate limiting
+    },
+  },
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+});
+```
+
+---
+
+## Production Checklist
+
+Before deploying:
+
+- [ ] Realtime enabled for `notifications` table
+- [ ] RLS policies allow SELECT for user's own notifications
+- [ ] RLS policies allow INSERT for system/admin
+- [ ] Channel filter syntax is correct (`user_id=eq.${userId}`)
+- [ ] Environment variables are set correctly
+- [ ] Channel cleanup happens in useEffect return
+- [ ] Status monitoring is implemented
+- [ ] Error handling catches subscription failures
+
+---
 
 ## Common Error Messages
 
-### "Failed to construct 'WebSocket': The URL '[url]' is invalid"
-- Environment variable `VITE_SUPABASE_URL` is missing or malformed
-- Check deployment platform environment variables
+### "Realtime is not enabled"
+**Solution**: Enable Realtime in Supabase Dashboard → Database → Replication
 
-### "WebSocket connection to 'wss://...' failed: Error in connection establishment"
-- Domain not whitelisted in Supabase
-- Network/firewall blocking WebSocket
-- Supabase Realtime not enabled
+### "403 Forbidden" or "Permission denied"
+**Solution**: Check RLS policies - user must have SELECT permission
 
-### "CHANNEL_ERROR"
-- Supabase Realtime not enabled on project or table
-- Invalid channel configuration
-- Authentication issue with Supabase
+### "Channel timed out"
+**Solution**: 
+- Check internet connection
+- Verify Supabase project is not paused
+- Check firewall/proxy settings
 
-### "TIMED_OUT"
-- Network too slow or unstable
-- Firewall delaying WebSocket handshake
-- Supabase project overloaded (rare)
+### "subscription failed"
+**Solution**: Verify table name, schema, and filter syntax
 
-## Testing Real-Time Updates
+---
 
-### Manual Test Steps:
-1. Open your deployed dashboard in Tab 1
-2. Watch the connection status indicator
-3. Open Supabase SQL Editor in Tab 2
-4. Run this query:
-```sql
-UPDATE student_profiles 
-SET xp = xp + 100 
-WHERE id = 'YOUR_USER_ID';
-```
-5. In Tab 1, XP should update automatically within 1-2 seconds
+## Additional Resources
 
-### Expected Behavior:
-- ✅ XP updates without page refresh
-- ✅ Console shows "🔴 Real-time update received"
-- ✅ Status stays "🟢 Live updates active"
+- [Supabase Realtime Docs](https://supabase.com/docs/guides/realtime)
+- [Postgres Changes Documentation](https://supabase.com/docs/guides/realtime/postgres-changes)
+- [RLS Policies Guide](https://supabase.com/docs/guides/auth/row-level-security)
 
-### If Not Working:
-- ❌ XP doesn't update → Check console for errors
-- ❌ Status shows "🔴 Using manual refresh" → Check Supabase Realtime enabled
-- ❌ Console shows connection errors → Check environment variables and domain whitelist
+---
 
-## Quick Fix Checklist
+## Quick Fix Summary
 
-- [ ] Environment variables set correctly on deployment platform
-- [ ] Supabase Realtime enabled in project settings
-- [ ] Deployed domain whitelisted in Supabase authentication settings
-- [ ] HTTPS (not HTTP) for deployed site
-- [ ] Browser developer console shows connection logs
-- [ ] WebSocket support verified in browser
-- [ ] Firewall/network not blocking WebSocket
+**Most likely fix for "Real-time connection failed":**
 
-## Contact Points
+1. Go to Supabase Dashboard
+2. Navigate to Database → Replication
+3. Find `notifications` table
+4. Enable replication
+5. Refresh your app
 
-If issue persists after following this guide:
-1. Check Supabase status page: https://status.supabase.com
-2. Review Supabase docs: https://supabase.com/docs/guides/realtime
-3. Test on different network/device to isolate issue
-4. Contact deployment platform support if environment variables not working
-
-## Polling Fallback
-
-If real-time fails after 3 retries, system automatically switches to polling:
-- Updates every 30 seconds instead of instantly
-- Shows "🔴 Using manual refresh" status
-- Still functional, just slower
-- Refresh button available to manually update
+If that doesn't work, check RLS policies next.
