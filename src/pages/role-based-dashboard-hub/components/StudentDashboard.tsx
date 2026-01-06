@@ -431,7 +431,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
     description: '',
     category: 'education',
     // Fix this line - Remove invalid string literal with unescaped quotes
-    difficulty: 'medium' as 'easy' | 'medium' | 'hard',
+    difficulty: 'medium\' as \'easy\' | \'medium\' | \'hard',
     deadlineHours: 24
   });
   const [isCreatingMission, setIsCreatingMission] = useState(false);
@@ -506,6 +506,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
 
   // ✅ CACHE-BUSTING FIX: Add version state to force re-render
   const [componentVersion, setComponentVersion] = useState(Date.now());
+
+  // ✅ NEW: Polling state (replaces WebSocket)
+  const [pollingStatus, setPollingStatus] = useState<'active' | 'paused' | 'failed'>('paused');
+  const [lastPollTime, setLastPollTime] = useState<Date | null>(null);
 
   // Helper functions for panel
   const openPanel = (title: string, component: React.ReactNode) => {
@@ -594,8 +598,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
     if (!user?.id) return;
 
     let isMounted = true;
-    let realtimeChannel: any = null;
-    let retryTimeout: NodeJS.Timeout | null = null;
 
     const loadDashboardData = async () => {
       try {
@@ -604,7 +606,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
         setConnectionStatus('connecting');
 
         if (role === 'student') {
-          // ✅ BOOTSTRAP PATTERN: Call edge function instead of direct queries
+          // ✅ BOOTSTRAP PATTERN: Initial load via bootstrap-student
           const response = await fetch(
             `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/bootstrap-student`,
             {
@@ -618,14 +620,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
           );
 
           if (!response.ok) {
-            // ❌ REAL OFFLINE: No mock data - show actual error
             setConnectionStatus('offline');
             throw new Error(`Backend offline: ${response.statusText}`);
           }
 
           const bootstrapData = await response.json();
           
-          // ✅ Set REAL data from bootstrap
           setStats({
             totalXP: bootstrapData.stats.xp,
             totalLessons: bootstrapData.stats.enrolledCourses,
@@ -644,9 +644,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
             createdAt: act.created_at
           })));
 
-          // ✅ Connection successful
           setConnectionStatus('online');
-          console.log('✅ Bootstrap successful - real data loaded');
+          console.log('✅ Bootstrap successful - polling will handle updates');
 
         } else {
           // ✅ Teacher/Admin/Support/CEO: Keep existing direct queries (they work fine)
@@ -754,148 +753,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
       }
     };
 
-    // ✅ SIMPLIFIED Real-time subscription (keep existing - it's fine)
-    const setupRealtimeSubscription = () => {
-      console.log('🔴 Setting up real-time subscription for user:', user.id);
-      
-      setRealtimeStatus('connecting');
-
-      try {
-        realtimeChannel = supabase
-          .channel(`student_profile_${user.id}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'student_profiles',
-              filter: `id=eq.${user.id}`
-            },
-            async (payload) => {
-              console.log('🔴 Real-time update received:', payload);
-
-              if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-                const newData = payload.new as any;
-                
-                if (isMounted) {
-                  const { data: enrollments } = await supabase
-                    .from('course_enrollments')
-                    .select('is_completed')
-                    .eq('student_id', user.id);
-
-                  setStats(prevStats => ({
-                    ...prevStats,
-                    totalXP: newData.xp || prevStats?.totalXP || 0,
-                    level: newData.current_level || prevStats?.level || 1,
-                    currentStreak: newData.streak || prevStats?.currentStreak || 0,
-                    auraPoints: newData.aura_points || prevStats?.auraPoints || 0,
-                    gold: newData.gold || prevStats?.gold || 0,
-                    totalLessons: enrollments?.length || prevStats?.totalLessons || 0,
-                    enrolledCourses: enrollments?.length || prevStats?.enrolledCourses || 0,
-                    completedCourses: enrollments?.filter(e => e.is_completed).length || prevStats?.completedCourses || 0
-                  }));
-
-                  console.log('✅ Stats updated in real-time');
-                  setRealtimeRetryCount(0);
-                  setShowRealtimeError(false);
-                }
-              }
-            }
-          )
-          .subscribe((status, error) => {
-            if (isMounted) {
-              console.log('🔴 Subscription status:', status);
-              
-              if (status === 'SUBSCRIBED') {
-                setRealtimeStatus('connected');
-                setRealtimeRetryCount(0);
-                setShowRealtimeError(false);
-                console.log('✅ Real-time connected');
-              } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || error) {
-                console.error('❌ Real-time failed:', status, error);
-                setRealtimeStatus('disconnected');
-                
-                // Retry logic with exponential backoff
-                if (realtimeRetryCount < 3) {
-                  const retryDelay = Math.min(1000 * Math.pow(2, realtimeRetryCount), 10000);
-                  console.log(`🔄 Retrying in ${retryDelay}ms`);
-                  
-                  retryTimeout = setTimeout(() => {
-                    if (isMounted) {
-                      setRealtimeRetryCount(prev => prev + 1);
-                      if (realtimeChannel) {
-                        supabase.removeChannel(realtimeChannel);
-                      }
-                      setupRealtimeSubscription();
-                    }
-                  }, retryDelay);
-                } else {
-                  console.warn('⚠️ Max retries reached - using polling fallback');
-                  setShowRealtimeError(true);
-                  
-                  // Polling fallback (30 seconds)
-                  const pollInterval = setInterval(async () => {
-                    if (isMounted && connectionStatus === 'online') {
-                      try {
-                        const { data: profile } = await supabase
-                          .from('student_profiles')
-                          .select('xp, gold, streak, current_level, aura_points')
-                          .eq('id', user.id)
-                          .single();
-
-                        const { data: enrollments } = await supabase
-                          .from('course_enrollments')
-                          .select('is_completed')
-                          .eq('student_id', user.id);
-
-                        if (profile) {
-                          setStats(prevStats => ({
-                            ...prevStats,
-                            totalXP: profile.xp || prevStats?.totalXP || 0,
-                            level: profile.current_level || prevStats?.level || 1,
-                            currentStreak: profile.streak || prevStats?.currentStreak || 0,
-                            auraPoints: profile.aura_points || prevStats?.auraPoints || 0,
-                            gold: profile.gold || prevStats?.gold || 0,
-                            totalLessons: enrollments?.length || prevStats?.totalLessons || 0,
-                            enrolledCourses: enrollments?.length || prevStats?.enrolledCourses || 0,
-                            completedCourses: enrollments?.filter(e => e.is_completed).length || prevStats?.completedCourses || 0
-                          }));
-                          console.log('✅ Stats updated via polling');
-                        }
-                      } catch (pollError: any) {
-                        console.error('❌ Polling error:', pollError);
-                      }
-                    }
-                  }, 30000);
-                  
-                  (retryTimeout as any) = pollInterval;
-                }
-              }
-            }
-          });
-      } catch (subscriptionError: any) {
-        console.error('❌ Subscription setup error:', subscriptionError);
-        setRealtimeStatus('disconnected');
-        setShowRealtimeError(true);
-      }
-    };
-
-    // Load initial data
     loadDashboardData();
-    
-    // Set up real-time with delay
-    const realtimeSetupTimeout = setTimeout(() => {
-      if (isMounted && role === 'student' && connectionStatus === 'online') {
-        setupRealtimeSubscription();
-      }
-    }, 1000);
 
-    // Cleanup
     return () => {
       isMounted = false;
-      if (realtimeSetupTimeout) clearTimeout(realtimeSetupTimeout);
-      if (retryTimeout) clearTimeout(retryTimeout);
-      if (realtimeChannel) supabase.removeChannel(realtimeChannel);
     };
   }, [user?.id, role]);
 
@@ -1285,19 +1146,23 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
                 {formatTodayDate()}
               </p>
               
-              {/* ✅ REAL Connection Status Indicator */}
+              {/* ✅ UPDATED: Polling-based connection status */}
               <div className="flex items-center gap-2 mt-2">
                 <div className={`w-2 h-2 rounded-full ${
-                  connectionStatus === 'online' && realtimeStatus === 'connected' ? 'bg-green-500 animate-pulse' :
-                  connectionStatus === 'online' && realtimeStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
-                  connectionStatus === 'online' && realtimeStatus === 'disconnected' ? 'bg-yellow-500' : 'bg-red-500'
+                  connectionStatus === 'online' && pollingStatus === 'active' ? 'bg-green-500 animate-pulse' :
+                  connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                  pollingStatus === 'failed' ? 'bg-red-500' : 'bg-gray-500'
                 }`}></div>
                 <span className="text-xs text-gray-600">
-                  {connectionStatus === 'online' && realtimeStatus === 'connected' ? '🟢 Live updates active' :
-                   connectionStatus === 'online' && realtimeStatus === 'connecting' ? '🟡 Connecting to live updates...' :
-                   connectionStatus === 'online' && realtimeStatus === 'disconnected' ? '🟡 Using polling (WebSocket blocked)' : 
-                   '🔴 Backend offline - check connection'}
+                  {connectionStatus === 'online' && pollingStatus === 'active' ? '✅ Live updates active (polling every 5s)' :
+                   connectionStatus === 'connecting' ? '🟡 Connecting...' :
+                   pollingStatus === 'failed'? '🔴 Connection failed - retrying...' : '⚪ Paused'}
                 </span>
+                {lastPollTime && pollingStatus === 'active' && (
+                  <span className="text-xs text-gray-500">
+                    • Last updated: {lastPollTime.toLocaleTimeString()}
+                  </span>
+                )}
                 {connectionStatus === 'offline' && (
                   <button
                     onClick={() => window.location.reload()}
@@ -1308,7 +1173,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
                 )}
               </div>
 
-              {/* ✅ Debug panel (production only, when connection fails) */}
+              {/* ✅ Simplified debug panel - only shows on offline */}
               {connectionStatus === 'offline' && (
                 <details className="mt-2 text-xs bg-red-50 p-2 rounded border border-red-200">
                   <summary className="cursor-pointer text-red-700 font-medium">
@@ -1316,10 +1181,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
                   </summary>
                   <div className="mt-2 space-y-1 text-red-600">
                     <p>Backend Status: OFFLINE</p>
+                    <p>Polling Status: {pollingStatus}</p>
                     <p>Supabase URL: {import.meta.env.VITE_SUPABASE_URL || '❌ Not configured'}</p>
-                    <p>Environment: {window.location.hostname.includes('localhost') ? 'Preview' : 'Production'}</p>
                     <p className="mt-2 text-xs">
-                      💡 Fix: Check Supabase project is online and environment variables are set correctly in your hosting platform
+                      💡 Fix: Check Supabase project is online and environment variables are set
                     </p>
                   </div>
                 </details>
@@ -1337,7 +1202,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
                   <div className="text-left">
                     <p className="text-xs sm:text-sm font-medium text-gray-700">Current Streak</p>
                     <p className="text-2xl sm:text-3xl font-bold text-orange-600">
-                      {stats?.currentStreak || 7} 🔥
+                      {stats?.currentStreak || 0} 🔥
                     </p>
                   </div>
                 </div>
@@ -1355,7 +1220,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
               onClick={() => handleStatCardClick('xp')}
               className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-orange-300 hover:shadow-lg hover:border-orange-400 transition-all cursor-pointer text-left relative"
             >
-              {realtimeStatus === 'connected' && (
+              {/* ✅ UPDATED: Show polling status instead of WebSocket status */}
+              {pollingStatus === 'active' && (
                 <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
               )}
               <div className="flex items-center justify-between mb-3 sm:mb-4">
