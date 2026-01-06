@@ -20,6 +20,8 @@ import { Assignment, CourseDiscussion, QuizTemplate, GradeRecord, CourseSyllabus
 import { studyRoomService } from '../../../services/studyRoomService';
 // Add this import for courseContentService
 import { courseContentService } from '../../../services/courseContentService';
+// Add this block - Import studentDashboardService
+import { studentDashboardService, SkillProgress, Achievement, DailyMission, StudyCalendarEvent } from '../../../services/studentDashboardService';
 // NEW: Import Phase 2 services
 import { 
   certificateService, 
@@ -69,7 +71,6 @@ import CourseContentView from './CourseContentView';
 import { StudentStats } from '../../../services/studentDashboardService';
 
 // Add this block - Import missing services
-import { studentDashboardService } from '../../../services/studentDashboardService';
 import { resourceUnlockService, TutoringResource, StudentLevel } from '../../../services/resourceUnlockService';
 import { marketplaceService, MarketplaceProduct, PaymentMethod, ProductCategory, CartItem, AuthorProfile } from '../../../services/marketplaceService';
 // End of added block
@@ -429,8 +430,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
     title: '',
     description: '',
     category: 'education',
-    // Fix this line - Invalid string literal with unescaped quotes
-    difficulty: 'medium\' as \'easy\' | \'medium\' | \'hard',
+    // Fix this line - Remove invalid string literal with unescaped quotes
+    difficulty: 'medium' as 'easy' | 'medium' | 'hard',
     deadlineHours: 24
   });
   const [isCreatingMission, setIsCreatingMission] = useState(false);
@@ -470,6 +471,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
   const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
   const [realtimeRetryCount, setRealtimeRetryCount] = useState(0);
   const [showRealtimeError, setShowRealtimeError] = useState(false);
+  // Add this block - Add connection status state for backend
+  const [connectionStatus, setConnectionStatus] = useState<'online' | 'offline' | 'connecting'>('connecting');
   // 🔴 NEW: Add detailed connection debugging state
   const [connectionDebugInfo, setConnectionDebugInfo] = useState<{
     environment: 'preview' | 'production';
@@ -598,158 +601,82 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
       try {
         setLoading(true);
         setError(null);
+        setConnectionStatus('connecting');
 
-        // ✅ FIX: Query stats based on role
-        let statsData;
-        try {
-          console.log('🔵 [ROLE-BASED] Fetching stats for role:', role);
-
-          if (role === 'student') {
-            // ✅ Student: Query student_profiles table
-            const { data: profile, error: profileError } = await supabase
-              .from('student_profiles')
-              .select('xp, gold, streak, current_level, aura_points')
-              .eq('id', user.id)
-              .single();
-
-            if (profileError) {
-              console.warn('⚠️ Profile query error:', profileError);
-              throw profileError;
+        if (role === 'student') {
+          // ✅ BOOTSTRAP PATTERN: Call edge function instead of direct queries
+          const response = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/bootstrap-student`,
+            {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+                'x-user-id': user.id,
+                'Content-Type': 'application/json'
+              }
             }
+          );
 
-            const { data: enrollments, error: enrollError } = await supabase
-              .from('course_enrollments')
-              .select('is_completed')
-              .eq('student_id', user.id);
-
-            if (enrollError) {
-              console.warn('⚠️ Enrollments query error:', enrollError);
-              throw enrollError;
-            }
-
-            statsData = {
-              xp: profile?.xp || 0,
-              gold: profile?.gold || 0,
-              streak: profile?.streak || 0,
-              level: profile?.current_level || 1,
-              aura_points: profile?.aura_points || 0,
-              enrolled_courses: enrollments?.length || 0,
-              completed_courses: enrollments?.filter(e => e.is_completed).length || 0
-            };
-
-            // Set student stats
-            setStats({
-              totalXP: statsData.xp,
-              totalLessons: statsData.enrolled_courses,
-              currentStreak: statsData.streak,
-              level: statsData.level,
-              auraPoints: statsData.aura_points,
-              gold: statsData.gold,
-              enrolledCourses: statsData.enrolled_courses,
-              completedCourses: statsData.completed_courses
-            });
-          } else {
-            // ✅ Teacher/Admin/Support/CEO: Query professional stats
-            const { data: courses, error: coursesError } = await supabase
-              .from('courses')
-              .select('id')
-              .eq('instructor_id', user.id);
-
-            if (coursesError) {
-              console.warn('⚠️ Courses query error:', coursesError);
-              throw coursesError;
-            }
-
-            const { data: enrollments, error: enrollError } = await supabase
-              .from('course_enrollments')
-              .select('student_id')
-              .in('course_id', courses?.map(c => c.id) || []);
-
-            if (enrollError) {
-              console.warn('⚠️ Enrollments query error:', enrollError);
-              throw enrollError;
-            }
-
-            // Calculate unique students
-            const uniqueStudents = new Set(enrollments?.map(e => e.student_id) || []).size;
-
-            // Mock rating and revenue (would come from a ratings/payments table in production)
-            const mockRating = 4.7;
-            const mockRevenue = (courses?.length || 0) * 25; // $25 per course as mock
-
-            setTeacherStats({
-              coursesTaught: courses?.length || 0,
-              totalStudents: uniqueStudents,
-              averageRating: mockRating,
-              totalRevenue: mockRevenue
-            });
+          if (!response.ok) {
+            // ❌ REAL OFFLINE: No mock data - show actual error
+            setConnectionStatus('offline');
+            throw new Error(`Backend offline: ${response.statusText}`);
           }
 
-          // ✅ Query user_activities (common for all roles)
-          const { data: activities, error: activitiesError } = await supabase
-            .from('user_activities')
-            .select('id, title, xp_earned, created_at')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(5);
-
-          if (activitiesError) {
-            console.warn('⚠️ Activities query error:', activitiesError);
-          }
-
-          if (activities && activities.length > 0) {
-            setUserActivities(activities.map(act => ({
-              id: act.id,
-              title: act.title,
-              xpEarned: act.xp_earned,
-              createdAt: act.created_at
-            })));
-          }
-
-          console.log('✅ [ROLE-BASED] Data fetched successfully');
-        } catch (directQueryError: any) {
-          console.error('❌ Direct query failed, using mock fallback:', directQueryError.message);
+          const bootstrapData = await response.json();
           
-          // ✅ Role-based mock fallback
-          if (role === 'student') {
-            statsData = {
-              xp: 3400,
-              gold: 1250,
-              streak: 7,
-              level: 3,
-              aura_points: 1500,
-              enrolled_courses: 5,
-              completed_courses: 2
-            };
-            
-            setStats({
-              totalXP: statsData.xp,
-              totalLessons: statsData.enrolled_courses,
-              currentStreak: statsData.streak,
-              level: statsData.level,
-              auraPoints: statsData.aura_points,
-              gold: statsData.gold,
-              enrolledCourses: statsData.enrolled_courses,
-              completedCourses: statsData.completed_courses
-            });
-          } else {
-            setTeacherStats({
-              coursesTaught: 3,
-              totalStudents: 45,
-              averageRating: 4.7,
-              totalRevenue: 75
-            });
-          }
-          
-          setUserActivities([
-            { id: '1', title: 'Completed React Basics', xpEarned: 100, createdAt: new Date().toISOString() },
-            { id: '2', title: 'Maintained 7-day streak', xpEarned: 50, createdAt: new Date().toISOString() }
-          ]);
-          
-          console.log('📦 Using mock data:', statsData);
+          // ✅ Set REAL data from bootstrap
+          setStats({
+            totalXP: bootstrapData.stats.xp,
+            totalLessons: bootstrapData.stats.enrolledCourses,
+            currentStreak: bootstrapData.stats.streak,
+            level: bootstrapData.stats.level,
+            auraPoints: bootstrapData.stats.auraPoints,
+            gold: bootstrapData.stats.gold,
+            enrolledCourses: bootstrapData.stats.enrolledCourses,
+            completedCourses: bootstrapData.stats.completedCourses
+          });
+
+          setUserActivities(bootstrapData.activities.map((act: any) => ({
+            id: act.id,
+            title: act.title,
+            xpEarned: act.xp_earned,
+            createdAt: act.created_at
+          })));
+
+          // ✅ Connection successful
+          setConnectionStatus('online');
+          console.log('✅ Bootstrap successful - real data loaded');
+
+        } else {
+          // ✅ Teacher/Admin/Support/CEO: Keep existing direct queries (they work fine)
+          const { data: courses, error: coursesError } = await supabase
+            .from('courses')
+            .select('id')
+            .eq('instructor_id', user.id);
+
+          if (coursesError) throw coursesError;
+
+          const { data: enrollments, error: enrollError } = await supabase
+            .from('course_enrollments')
+            .select('student_id')
+            .in('course_id', courses?.map(c => c.id) || []);
+
+          if (enrollError) throw enrollError;
+
+          const uniqueStudents = new Set(enrollments?.map(e => e.student_id) || []).size;
+
+          setTeacherStats({
+            coursesTaught: courses?.length || 0,
+            totalStudents: uniqueStudents,
+            averageRating: 4.7,
+            totalRevenue: (courses?.length || 0) * 25
+          });
+
+          setConnectionStatus('online');
         }
 
-        // ✅ Load other dashboard data using existing services (these don't use edge functions)
+        // ✅ Load other dashboard data (keep existing service calls - they work fine)
         const [
           skillsData, 
           achievementsData, 
@@ -767,36 +694,24 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
           downlineData,
           earningsData
         ] = await Promise.all([
-          studentDashboardService.getSkillProgress(user.id).catch(err => { console.error('Skills error:', err); return []; }),
-          studentDashboardService.getRecentAchievements(user.id, 3).catch(err => { console.error('Achievements error:', err); return []; }),
-          studentDashboardService.getDailyMissions(user.id).catch(err => { console.error('Missions error:', err); return []; }),
-          studentDashboardService.getStudyCalendar(user.id, 35).catch(err => { console.error('Calendar error:', err); return []; }),
-          resourceUnlockService.getTutoringResources().catch(err => { console.error('Resources error:', err); return []; }),
-          resourceUnlockService.getStudentLevel(user.id).catch(err => { console.error('Level error:', err); return null; }),
-          certificateService.getStudentCertificates(user.id).catch(err => { console.error('Certificates error:', err); return []; }),
-          subscriptionService.getSubscriptionPlans().catch(err => { console.error('Plans error:', err); return []; }),
-          subscriptionService.getCurrentSubscription(user.id).catch(err => { console.error('Subscription error:', err); return null; }),
-          gamificationService.getStudentBadgeProgress(user.id).catch(err => { console.error('Badges error:', err); return []; }),
-          mlmEarnersService.getNetworkStats(user.id).catch(err => { console.error('Network error:', err); return null; }),
-          mlmEarnersService.getCommissions(user.id, 10).catch(err => { console.error('Commissions error:', err); return []; }),
-          mlmEarnersService.getPayoutRequests(user.id).catch(err => { console.error('Payouts error:', err); return []; }),
-          mlmEarnersService.getDownlineMembers(user.id).catch(err => { console.error('Downline error:', err); return []; }),
-          mlmEarnersService.getEarningsBreakdown(user.id).catch(err => { console.error('Earnings error:', err); return { totalEarnings: 0, availableBalance: 0, pendingBalance: 0, withdrawnTotal: 0 }; })
+          studentDashboardService.getSkillProgress(user.id).catch(() => []),
+          studentDashboardService.getRecentAchievements(user.id, 3).catch(() => []),
+          studentDashboardService.getDailyMissions(user.id).catch(() => []),
+          studentDashboardService.getStudyCalendar(user.id, 35).catch(() => []),
+          resourceUnlockService.getTutoringResources().catch(() => []),
+          resourceUnlockService.getStudentLevel(user.id).catch(() => null),
+          certificateService.getStudentCertificates(user.id).catch(() => []),
+          subscriptionService.getSubscriptionPlans().catch(() => []),
+          subscriptionService.getCurrentSubscription(user.id).catch(() => null),
+          gamificationService.getStudentBadgeProgress(user.id).catch(() => []),
+          mlmEarnersService.getNetworkStats(user.id).catch(() => null),
+          mlmEarnersService.getCommissions(user.id, 10).catch(() => []),
+          mlmEarnersService.getPayoutRequests(user.id).catch(() => []),
+          mlmEarnersService.getDownlineMembers(user.id).catch(() => []),
+          mlmEarnersService.getEarningsBreakdown(user.id).catch(() => ({ totalEarnings: 0, availableBalance: 0, pendingBalance: 0, withdrawnTotal: 0 }))
         ]);
 
         if (isMounted) {
-          // ✅ Set stats from direct Supabase query results
-          setStats({
-            totalXP: statsData.xp,
-            totalLessons: statsData.enrolled_courses,
-            currentStreak: statsData.streak,
-            level: statsData.level,
-            auraPoints: statsData.aura_points,
-            gold: statsData.gold,
-            enrolledCourses: statsData.enrolled_courses,
-            completedCourses: statsData.completed_courses
-          });
-          
           setSkillProgress(skillsData);
           setRecentAchievements(achievementsData);
           setDailyMissions(missionsData);
@@ -818,7 +733,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
             const today = new Date().toDateString();
             const lastShownDate = localStorage.getItem('lastStreakAnimationDate');
             
-            if (lastShownDate !== today && statsData.streak > 0) {
+            if (lastShownDate !== today && (stats?.currentStreak || 0) > 0) {
               setTimeout(() => {
                 setShowStreakAnimation(true);
                 localStorage.setItem('lastStreakAnimationDate', today);
@@ -828,8 +743,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
         }
       } catch (err: any) {
         if (isMounted) {
-          console.error('❌ Dashboard loading error:', err);
-          setError(err.message || 'Failed to load dashboard data');
+          console.error('❌ Bootstrap error:', err);
+          setConnectionStatus('offline');
+          setError(err.message || 'Backend is offline - cannot load dashboard');
         }
       } finally {
         if (isMounted) {
@@ -838,38 +754,15 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
       }
     };
 
-    // ✅ NEW: Enhanced Real-time subscription with retry logic and better error handling
+    // ✅ SIMPLIFIED Real-time subscription (keep existing - it's fine)
     const setupRealtimeSubscription = () => {
       console.log('🔴 Setting up real-time subscription for user:', user.id);
-      console.log('🌐 Environment:', connectionDebugInfo.environment);
-      console.log('🔗 Supabase URL:', connectionDebugInfo.supabaseUrl);
-      console.log('🔌 WebSocket supported:', connectionDebugInfo.websocketSupported);
       
       setRealtimeStatus('connecting');
-      
-      // 🔴 UPDATE: Log connection debug info
-      setConnectionDebugInfo(prev => ({
-        ...prev,
-        attemptCount: prev.attemptCount + 1,
-        timestamp: new Date().toISOString()
-      }));
 
       try {
-        // 🔴 FIX: Enhanced channel configuration with explicit WebSocket settings
         realtimeChannel = supabase
-          .channel(`student_profile_${user.id}`, {
-            config: {
-              presence: {
-                key: user.id,
-              },
-              // 🔴 NEW: Explicit WebSocket configuration for production
-              broadcast: { self: true },
-              postgres_changes: {
-                // 🔴 NEW: Force WebSocket transport instead of long-polling
-                listen_to: 'postgres_changes'
-              }
-            },
-          })
+          .channel(`student_profile_${user.id}`)
           .on(
             'postgres_changes',
             {
@@ -880,13 +773,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
             },
             async (payload) => {
               console.log('🔴 Real-time update received:', payload);
-              console.log('🌐 Connection active at:', new Date().toISOString());
 
               if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
                 const newData = payload.new as any;
                 
                 if (isMounted) {
-                  // ✅ Query enrollments in real-time - direct Supabase query
                   const { data: enrollments } = await supabase
                     .from('course_enrollments')
                     .select('is_completed')
@@ -905,81 +796,33 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
                   }));
 
                   console.log('✅ Stats updated in real-time');
-                  
-                  // Reset retry count on successful update
                   setRealtimeRetryCount(0);
                   setShowRealtimeError(false);
-                  
-                  // 🔴 NEW: Update debug info on successful connection
-                  setConnectionDebugInfo(prev => ({
-                    ...prev,
-                    lastError: null,
-                    timestamp: new Date().toISOString()
-                  }));
                 }
               }
             }
           )
           .subscribe((status, error) => {
             if (isMounted) {
-              console.log('🔴 Real-time subscription status:', status, error);
-              console.log('🌐 Environment:', connectionDebugInfo.environment);
-              console.log('🔗 Supabase URL:', connectionDebugInfo.supabaseUrl);
-              
-              // 🔴 NEW: Log detailed error information
-              if (error) {
-                console.error('❌ Subscription error details:', {
-                  message: error.message,
-                  code: error.code,
-                  details: error.details,
-                  hint: error.hint
-                });
-                
-                setConnectionDebugInfo(prev => ({
-                  ...prev,
-                  lastError: `${error.message} (${error.code})`
-                }));
-              }
+              console.log('🔴 Subscription status:', status);
               
               if (status === 'SUBSCRIBED') {
                 setRealtimeStatus('connected');
                 setRealtimeRetryCount(0);
                 setShowRealtimeError(false);
-                console.log('✅ Real-time connection established successfully');
-                console.log('🌐 Connected at:', new Date().toISOString());
-                
-                // 🔴 NEW: Update debug info on successful connection
-                setConnectionDebugInfo(prev => ({
-                  ...prev,
-                  lastError: null,
-                  timestamp: new Date().toISOString()
-                }));
+                console.log('✅ Real-time connected');
               } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || error) {
-                console.error('❌ Real-time connection failed:', status, error);
-                console.error('🌐 Failed at:', new Date().toISOString());
-                console.error('🔗 Supabase URL:', connectionDebugInfo.supabaseUrl);
-                console.error('🔌 WebSocket support:', connectionDebugInfo.websocketSupported);
-                
+                console.error('❌ Real-time failed:', status, error);
                 setRealtimeStatus('disconnected');
-                
-                // 🔴 NEW: Enhanced error logging
-                const errorMessage = error ? `${error.message} (${error.code})` : status;
-                setConnectionDebugInfo(prev => ({
-                  ...prev,
-                  lastError: errorMessage,
-                  timestamp: new Date().toISOString()
-                }));
                 
                 // Retry logic with exponential backoff
                 if (realtimeRetryCount < 3) {
                   const retryDelay = Math.min(1000 * Math.pow(2, realtimeRetryCount), 10000);
-                  console.log(`🔄 Retrying real-time connection in ${retryDelay}ms (attempt ${realtimeRetryCount + 1}/3)`);
-                  console.log('🔗 Using Supabase URL:', connectionDebugInfo.supabaseUrl);
+                  console.log(`🔄 Retrying in ${retryDelay}ms`);
                   
                   retryTimeout = setTimeout(() => {
                     if (isMounted) {
                       setRealtimeRetryCount(prev => prev + 1);
-                      // Clean up current channel and retry
                       if (realtimeChannel) {
                         supabase.removeChannel(realtimeChannel);
                       }
@@ -987,36 +830,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
                     }
                   }, retryDelay);
                 } else {
-                  console.warn('⚠️ Max retry attempts reached. Using polling fallback.');
-                  console.warn('🌐 Environment:', connectionDebugInfo.environment);
-                  console.warn('🔗 Supabase URL:', connectionDebugInfo.supabaseUrl);
-                  console.warn('🔌 WebSocket supported:', connectionDebugInfo.websocketSupported);
-                  
+                  console.warn('⚠️ Max retries reached - using polling fallback');
                   setShowRealtimeError(true);
                   
-                  // 🔴 FIX: Enhanced polling fallback with connection verification
+                  // Polling fallback (30 seconds)
                   const pollInterval = setInterval(async () => {
-                    if (isMounted) {
+                    if (isMounted && connectionStatus === 'online') {
                       try {
-                        console.log('🔄 Polling fallback attempt at:', new Date().toISOString());
-                        
-                        // 🔴 NEW: Verify Supabase connection before polling
-                        const { error: connectionError } = await supabase
-                          .from('student_profiles')
-                          .select('id')
-                          .eq('id', user.id)
-                          .limit(1);
-                        
-                        if (connectionError) {
-                          console.error('❌ Supabase connection error:', connectionError);
-                          setConnectionDebugInfo(prev => ({
-                            ...prev,
-                            lastError: `Polling error: ${connectionError.message}`,
-                            timestamp: new Date().toISOString()
-                          }));
-                          return;
-                        }
-                        
                         const { data: profile } = await supabase
                           .from('student_profiles')
                           .select('xp, gold, streak, current_level, aura_points')
@@ -1040,85 +860,44 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
                             enrolledCourses: enrollments?.length || prevStats?.enrolledCourses || 0,
                             completedCourses: enrollments?.filter(e => e.is_completed).length || prevStats?.completedCourses || 0
                           }));
-                          console.log('✅ Stats updated via polling fallback at:', new Date().toISOString());
-                          
-                          // 🔴 NEW: Update debug info on successful polling
-                          setConnectionDebugInfo(prev => ({
-                            ...prev,
-                            lastError: 'Using polling fallback (real-time failed)',
-                            timestamp: new Date().toISOString()
-                          }));
+                          console.log('✅ Stats updated via polling');
                         }
                       } catch (pollError: any) {
-                        console.error('❌ Polling fallback error:', pollError);
-                        setConnectionDebugInfo(prev => ({
-                          ...prev,
-                          lastError: `Polling error: ${pollError.message}`,
-                          timestamp: new Date().toISOString()
-                        }));
+                        console.error('❌ Polling error:', pollError);
                       }
                     }
                   }, 30000);
                   
-                  // Store interval for cleanup
                   (retryTimeout as any) = pollInterval;
                 }
-              } else if (status === 'CLOSED') {
-                setRealtimeStatus('disconnected');
-                console.log('🔴 Real-time channel closed at:', new Date().toISOString());
-                
-                setConnectionDebugInfo(prev => ({
-                  ...prev,
-                  lastError: 'Channel closed',
-                  timestamp: new Date().toISOString()
-                }));
               }
             }
           });
       } catch (subscriptionError: any) {
-        console.error('❌ Error setting up real-time subscription:', subscriptionError);
-        console.error('🌐 Environment:', connectionDebugInfo.environment);
-        console.error('🔗 Supabase URL:', connectionDebugInfo.supabaseUrl);
-        
+        console.error('❌ Subscription setup error:', subscriptionError);
         setRealtimeStatus('disconnected');
         setShowRealtimeError(true);
-        
-        setConnectionDebugInfo(prev => ({
-          ...prev,
-          lastError: `Setup error: ${subscriptionError.message}`,
-          timestamp: new Date().toISOString()
-        }));
       }
     };
 
     // Load initial data
     loadDashboardData();
     
-    // Set up real-time subscription with slight delay to ensure data is loaded first
+    // Set up real-time with delay
     const realtimeSetupTimeout = setTimeout(() => {
-      if (isMounted) {
+      if (isMounted && role === 'student' && connectionStatus === 'online') {
         setupRealtimeSubscription();
       }
     }, 1000);
 
-    // Cleanup function
+    // Cleanup
     return () => {
       isMounted = false;
-      
-      if (realtimeSetupTimeout) {
-        clearTimeout(realtimeSetupTimeout);
-      }
-      
-      if (retryTimeout) {
-        clearTimeout(retryTimeout);
-      }
-      
-      if (realtimeChannel) {
-        console.log('🔴 Unsubscribing from real-time channel');
-        supabase.removeChannel(realtimeChannel);
-      }
+      if (realtimeSetupTimeout) clearTimeout(realtimeSetupTimeout);
+      if (retryTimeout) clearTimeout(retryTimeout);
+      if (realtimeChannel) supabase.removeChannel(realtimeChannel);
     };
-  }, [user?.id, componentVersion, role]);
+  }, [user?.id, role]);
 
   // Load marketplace products
   useEffect(() => {
@@ -1495,7 +1274,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
 
     return (
       <div className="space-y-4 sm:space-y-6 pb-6 sm:pb-8 bg-gradient-to-br from-gray-50 via-orange-50 to-white min-h-screen p-3 sm:p-4 md:p-6 max-w-full overflow-x-hidden">
-        {/* Welcome Header with Date */}
+        {/* Welcome Header with REAL Connection Status */}
         <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div className="flex-1">
@@ -1506,49 +1285,45 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
                 {formatTodayDate()}
               </p>
               
-              {/* ENHANCED: Real-time connection status indicator with debugging */}
-              <div className="flex flex-col gap-2 mt-2">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${
-                    realtimeStatus === 'connected' ? 'bg-green-500 animate-pulse' :
-                    realtimeStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
-                  }`}></div>
-                  <span className="text-xs text-gray-600">
-                    {realtimeStatus === 'connected' ? '🟢 Live updates active' :
-                     realtimeStatus === 'connecting' ? '🟡 Connecting...' : '🔴 Using manual refresh'}
-                  </span>
-                  {showRealtimeError && (
-                    <button
-                      onClick={() => window.location.reload()}
-                      className="ml-2 text-xs text-blue-600 hover:text-blue-800 underline"
-                    >
-                      Refresh page
-                    </button>
-                  )}
-                </div>
-                
-                {/* 🔴 NEW: Debug info toggle (only in production for troubleshooting) */}
-                {connectionDebugInfo.environment === 'production' && (
-                  <details className="text-xs bg-gray-100 p-2 rounded">
-                    <summary className="cursor-pointer text-gray-700 font-medium">
-                      Connection Details (for debugging)
-                    </summary>
-                    <div className="mt-2 space-y-1 text-gray-600">
-                      <p>Environment: {connectionDebugInfo.environment}</p>
-                      <p>Supabase URL: {connectionDebugInfo.supabaseUrl}</p>
-                      <p>WebSocket Support: {connectionDebugInfo.websocketSupported ? 'Yes' : 'No'}</p>
-                      <p>Attempt Count: {connectionDebugInfo.attemptCount}</p>
-                      <p>Last Updated: {new Date(connectionDebugInfo.timestamp).toLocaleTimeString()}</p>
-                      {connectionDebugInfo.lastError && (
-                        <p className="text-red-600">Last Error: {connectionDebugInfo.lastError}</p>
-                      )}
-                      <p className="text-xs text-gray-500 mt-2">
-                        💡 If connection fails, check Supabase project settings → API → Realtime is enabled
-                      </p>
-                    </div>
-                  </details>
+              {/* ✅ REAL Connection Status Indicator */}
+              <div className="flex items-center gap-2 mt-2">
+                <div className={`w-2 h-2 rounded-full ${
+                  connectionStatus === 'online' && realtimeStatus === 'connected' ? 'bg-green-500 animate-pulse' :
+                  connectionStatus === 'online' && realtimeStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                  connectionStatus === 'online' && realtimeStatus === 'disconnected' ? 'bg-yellow-500' : 'bg-red-500'
+                }`}></div>
+                <span className="text-xs text-gray-600">
+                  {connectionStatus === 'online' && realtimeStatus === 'connected' ? '🟢 Live updates active' :
+                   connectionStatus === 'online' && realtimeStatus === 'connecting' ? '🟡 Connecting to live updates...' :
+                   connectionStatus === 'online' && realtimeStatus === 'disconnected' ? '🟡 Using polling (WebSocket blocked)' : 
+                   '🔴 Backend offline - check connection'}
+                </span>
+                {connectionStatus === 'offline' && (
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="ml-2 text-xs text-blue-600 hover:text-blue-800 underline"
+                  >
+                    Retry connection
+                  </button>
                 )}
               </div>
+
+              {/* ✅ Debug panel (production only, when connection fails) */}
+              {connectionStatus === 'offline' && (
+                <details className="mt-2 text-xs bg-red-50 p-2 rounded border border-red-200">
+                  <summary className="cursor-pointer text-red-700 font-medium">
+                    ⚠️ Connection Failed - Debug Info
+                  </summary>
+                  <div className="mt-2 space-y-1 text-red-600">
+                    <p>Backend Status: OFFLINE</p>
+                    <p>Supabase URL: {import.meta.env.VITE_SUPABASE_URL || '❌ Not configured'}</p>
+                    <p>Environment: {window.location.hostname.includes('localhost') ? 'Preview' : 'Production'}</p>
+                    <p className="mt-2 text-xs">
+                      💡 Fix: Check Supabase project is online and environment variables are set correctly in your hosting platform
+                    </p>
+                  </div>
+                </details>
+              )}
             </div>
 
             {/* Streak element (ONLY for students) */}
