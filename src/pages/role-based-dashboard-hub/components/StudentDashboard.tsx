@@ -598,6 +598,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
     if (!user?.id) return;
 
     let isMounted = true;
+    let pollingInterval: NodeJS.Timeout | null = null;
 
     const loadDashboardData = async () => {
       try {
@@ -608,12 +609,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
         if (role === 'student') {
           // ✅ BOOTSTRAP PATTERN: Initial load via bootstrap-student
           const response = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/bootstrap-student`,
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/student-stats?id=${user.id}`,
             {
               method: 'GET',
               headers: {
                 'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-                'x-user-id': user.id,
                 'Content-Type': 'application/json'
               }
             }
@@ -621,31 +621,29 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
 
           if (!response.ok) {
             setConnectionStatus('offline');
+            setPollingStatus('failed');
             throw new Error(`Backend offline: ${response.statusText}`);
           }
 
-          const bootstrapData = await response.json();
+          const statsData = await response.json();
           
-          setStats({
-            totalXP: bootstrapData.stats.xp,
-            totalLessons: bootstrapData.stats.enrolledCourses,
-            currentStreak: bootstrapData.stats.streak,
-            level: bootstrapData.stats.level,
-            auraPoints: bootstrapData.stats.auraPoints,
-            gold: bootstrapData.stats.gold,
-            enrolledCourses: bootstrapData.stats.enrolledCourses,
-            completedCourses: bootstrapData.stats.completedCourses
-          });
+          if (isMounted) {
+            setStats({
+              totalXP: statsData.xp || 0,
+              totalLessons: statsData.enrolled_courses || 0,
+              currentStreak: statsData.streak || 0,
+              level: statsData.level || 1,
+              auraPoints: statsData.aura_points || 0,
+              gold: statsData.gold || 0,
+              enrolledCourses: statsData.enrolled_courses || 0,
+              completedCourses: statsData.completed_courses || 0
+            });
 
-          setUserActivities(bootstrapData.activities.map((act: any) => ({
-            id: act.id,
-            title: act.title,
-            xpEarned: act.xp_earned,
-            createdAt: act.created_at
-          })));
-
-          setConnectionStatus('online');
-          console.log('✅ Bootstrap successful - polling will handle updates');
+            setConnectionStatus('online');
+            setPollingStatus('active');
+            setLastPollTime(new Date());
+            console.log('✅ Stats loaded - starting polling loop');
+          }
 
         } else {
           // ✅ Teacher/Admin/Support/CEO: Keep existing direct queries (they work fine)
@@ -665,14 +663,16 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
 
           const uniqueStudents = new Set(enrollments?.map(e => e.student_id) || []).size;
 
-          setTeacherStats({
-            coursesTaught: courses?.length || 0,
-            totalStudents: uniqueStudents,
-            averageRating: 4.7,
-            totalRevenue: (courses?.length || 0) * 25
-          });
+          if (isMounted) {
+            setTeacherStats({
+              coursesTaught: courses?.length || 0,
+              totalStudents: uniqueStudents,
+              averageRating: 4.7,
+              totalRevenue: (courses?.length || 0) * 25
+            });
 
-          setConnectionStatus('online');
+            setConnectionStatus('online');
+          }
         }
 
         // ✅ Load other dashboard data (keep existing service calls - they work fine)
@@ -732,7 +732,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
             const today = new Date().toDateString();
             const lastShownDate = localStorage.getItem('lastStreakAnimationDate');
             
-            if (lastShownDate !== today && (stats?.currentStreak || 0) > 0) {
+            if (lastShownDate !== today && (statsData?.streak || 0) > 0) {
               setTimeout(() => {
                 setShowStreakAnimation(true);
                 localStorage.setItem('lastStreakAnimationDate', today);
@@ -742,8 +742,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
         }
       } catch (err: any) {
         if (isMounted) {
-          console.error('❌ Bootstrap error:', err);
+          console.error('❌ Stats loading error:', err);
           setConnectionStatus('offline');
+          setPollingStatus('failed');
           setError(err.message || 'Backend is offline - cannot load dashboard');
         }
       } finally {
@@ -753,10 +754,68 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
       }
     };
 
+    // ✅ NEW: Polling function for live updates (student role only)
+    const pollForUpdates = async () => {
+      if (!isMounted || !user?.id || role !== 'student') return;
+
+      try {
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/student-stats?id=${user.id}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (!response.ok) {
+          setPollingStatus('failed');
+          setConnectionStatus('offline');
+          return;
+        }
+
+        const statsData = await response.json();
+        
+        if (isMounted) {
+          setStats({
+            totalXP: statsData.xp || 0,
+            totalLessons: statsData.enrolled_courses || 0,
+            currentStreak: statsData.streak || 0,
+            level: statsData.level || 1,
+            auraPoints: statsData.aura_points || 0,
+            gold: statsData.gold || 0,
+            enrolledCourses: statsData.enrolled_courses || 0,
+            completedCourses: statsData.completed_courses || 0
+          });
+
+          setPollingStatus('active');
+          setConnectionStatus('online');
+          setLastPollTime(new Date());
+        }
+      } catch (err: any) {
+        console.error('Polling error:', err);
+        if (isMounted) {
+          setPollingStatus('failed');
+          setConnectionStatus('offline');
+        }
+      }
+    };
+
+    // Initial load
     loadDashboardData();
+
+    // ✅ NEW: Set up polling interval (5 seconds)
+    if (role === 'student') {
+      pollingInterval = setInterval(pollForUpdates, 5000);
+    }
 
     return () => {
       isMounted = false;
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
     };
   }, [user?.id, role]);
 

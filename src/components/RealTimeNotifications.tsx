@@ -23,20 +23,46 @@ const RealTimeNotifications: React.FC = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showPanel, setShowPanel] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [connectionStatus, setConnectionStatus] = useState<string>('disconnected');
 
   useEffect(() => {
     if (!user) return;
 
     loadNotifications();
 
+    console.log('🔌 Attempting to connect to realtime channel...');
+    
     const channel = subscribeToNotifications(user.id, (notification) => {
+      console.log('📨 New notification received:', notification);
       setNotifications((prev) => [notification, ...prev]);
       setUnreadCount((prev) => prev + 1);
       showToast(notification);
     });
 
+    // Listen to channel state changes
+    channel
+      .on('system', {}, (payload: any) => {
+        console.log('📡 Channel system event:', payload);
+        if (payload.extension === 'postgres_changes') {
+          setConnectionStatus('connected');
+          console.log('✅ Realtime connection established');
+        }
+      })
+      .subscribe((status: string) => {
+        console.log('🔔 Subscription status:', status);
+        setConnectionStatus(status);
+        
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Successfully subscribed to notifications channel');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('❌ Subscription failed:', status);
+        }
+      });
+
     return () => {
+      console.log('🔌 Disconnecting from realtime channel');
       channel.unsubscribe();
+      setConnectionStatus('disconnected');
     };
   }, [user]);
 
@@ -110,6 +136,13 @@ const RealTimeNotifications: React.FC = () => {
 
   return (
     <>
+      {/* Add connection status indicator for debugging */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed bottom-4 right-4 px-3 py-2 bg-gray-800 text-white text-xs rounded z-50">
+          Realtime: {connectionStatus}
+        </div>
+      )}
+
       {/* Notification Bell */}
       <button
         onClick={() => setShowPanel(!showPanel)}

@@ -24,6 +24,7 @@ export interface MarketplaceProduct {
   totalSales: number;
   createdAt: string;
   updatedAt: string;
+  tags?: string[];
   sellerName?: string;
   sellerEmail?: string;
 }
@@ -74,6 +75,18 @@ export interface AuthorProfile {
   averageRating: number;
 }
 
+export interface MarketplaceItem {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  price: number;
+  tags: string[];
+  isAvailable: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 class MarketplaceService {
   // Get all active products with seller information
   async getActiveProducts(filters?: {
@@ -82,6 +95,7 @@ class MarketplaceService {
     minPrice?: number;
     maxPrice?: number;
     searchTerm?: string;
+    tags?: string[];
   }): Promise<MarketplaceProduct[]> {
     try {
       let query = supabase
@@ -113,6 +127,10 @@ class MarketplaceService {
         query = query.or(`title.ilike.%${filters.searchTerm}%,description.ilike.%${filters.searchTerm}%`);
       }
 
+      if (filters?.tags && filters.tags.length > 0) {
+        query = query.contains('tags', filters.tags);
+      }
+
       const { data, error } = await query;
 
       if (error) throw error;
@@ -133,16 +151,41 @@ class MarketplaceService {
         accessExpiryDays: product.access_expiry_days,
         fileUrl: product.file_url,
         previewImageUrl: product.preview_image_url,
-        ratingAverage: parseFloat(product.rating_average),
-        totalSales: product.total_sales,
+        ratingAverage: parseFloat(product.rating_average || '0'),
+        totalSales: product.total_sales || 0,
         createdAt: product.created_at,
         updatedAt: product.updated_at,
+        tags: product.tags || [],
         sellerName: product.seller?.full_name,
         sellerEmail: product.seller?.email
       }));
     } catch (error: any) {
       console.error('Error fetching products:', error);
       throw new Error(error.message || 'Failed to load products');
+    }
+  }
+
+  // Get tag statistics for all active products
+  async getTagStatistics(): Promise<Record<string, number>> {
+    try {
+      const { data, error } = await supabase
+        .from('marketplace_products')
+        .select('tags')
+        .eq('status', 'active');
+
+      if (error) throw error;
+
+      const tagCounts: Record<string, number> = {};
+      data?.forEach(product => {
+        product.tags?.forEach((tag: string) => {
+          tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+        });
+      });
+
+      return tagCounts;
+    } catch (error: any) {
+      console.error('Error fetching tag statistics:', error);
+      return {};
     }
   }
 
@@ -194,6 +237,7 @@ class MarketplaceService {
         totalSales: productData.total_sales,
         createdAt: productData.created_at,
         updatedAt: productData.updated_at,
+        tags: productData.tags || [],
         sellerName: productData.seller?.full_name,
         sellerEmail: productData.seller?.email
       };
@@ -525,6 +569,7 @@ class MarketplaceService {
         totalSales: product.total_sales,
         createdAt: product.created_at,
         updatedAt: product.updated_at,
+        tags: product.tags || [],
         sellerName: product.seller?.full_name,
         sellerEmail: product.seller?.email
       }));
@@ -533,6 +578,152 @@ class MarketplaceService {
       throw new Error(error.message || 'Failed to load author products');
     }
   }
+
+  // Search products by tags
+  async searchProductsByTags(tags: string[]): Promise<MarketplaceProduct[]> {
+    try {
+      const { data, error } = await supabase
+        .from('marketplace_products')
+        .select(`
+          *,
+          seller:user_profiles!seller_id(full_name, email)
+        `)
+        .contains('tags', tags)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      return (data || []).map(product => ({
+        id: product.id,
+        sellerId: product.seller_id,
+        title: product.title,
+        description: product.description,
+        category: product.category,
+        price: parseFloat(product.price),
+        paymentMethod: product.payment_method,
+        status: product.status,
+        inventoryCount: product.inventory_count,
+        downloadsAllowed: product.downloads_allowed,
+        printable: product.printable,
+        shareable: product.shareable,
+        accessExpiryDays: product.access_expiry_days,
+        fileUrl: product.file_url,
+        previewImageUrl: product.preview_image_url,
+        ratingAverage: parseFloat(product.rating_average),
+        totalSales: product.total_sales,
+        createdAt: product.created_at,
+        updatedAt: product.updated_at,
+        tags: product.tags || [],
+        sellerName: product.seller?.full_name,
+        sellerEmail: product.seller?.email
+      }));
+    } catch (error: any) {
+      console.error('Error searching products by tags:', error);
+      throw new Error(error.message || 'Failed to search products');
+    }
+  }
+
+  // Get all available tags from products
+  async getAvailableTags(): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from('marketplace_products')
+        .select('tags')
+        .eq('status', 'active');
+
+      if (error) throw error;
+
+      // Extract unique tags from all products
+      const allTags = data?.flatMap(item => item.tags || []) || [];
+      return Array.from(new Set(allTags)).sort();
+    } catch (error: any) {
+      console.error('Error fetching available tags:', error);
+      throw new Error(error.message || 'Failed to load tags');
+    }
+  }
 }
 
 export const marketplaceService = new MarketplaceService();
+
+export const getMarketplaceItems = async (filters?: {
+  category?: string;
+  search?: string;
+  tags?: string[];
+  priceRange?: { min: number; max: number };
+}): Promise<MarketplaceItem[]> => {
+  let query = supabase
+    .from('marketplace_items')
+    .select(`
+      *,
+      category:marketplace_categories(name)
+    `)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false });
+
+  // Apply category filter
+  if (filters?.category) {
+    query = query.eq('category_id', filters.category);
+  }
+
+  // Apply search filter
+  if (filters?.search) {
+    query = query.or(`name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+  }
+
+  // Apply tag filter using PostgreSQL array operators
+  if (filters?.tags && filters.tags.length > 0) {
+    query = query.contains('tags', filters.tags);
+  }
+
+  // Apply price range filter
+  if (filters?.priceRange) {
+    query = query
+      .gte('price', filters.priceRange.min)
+      .lte('price', filters.priceRange.max);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('Error fetching marketplace items:', error);
+    throw error;
+  }
+
+  return data || [];
+};
+
+export const searchMarketplaceByTags = async (tags: string[]): Promise<MarketplaceItem[]> => {
+  const { data, error } = await supabase
+    .from('marketplace_items')
+    .select(`
+      *,
+      category:marketplace_categories(name)
+    `)
+    .contains('tags', tags)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error searching marketplace by tags:', error);
+    throw error;
+  }
+
+  return data || [];
+};
+
+export const getAvailableTags = async (): Promise<string[]> => {
+  const { data, error } = await supabase
+    .from('marketplace_items')
+    .select('tags')
+    .eq('is_active', true);
+
+  if (error) {
+    console.error('Error fetching available tags:', error);
+    throw error;
+  }
+
+  // Extract unique tags from all items
+  const allTags = data?.flatMap(item => item.tags || []) || [];
+  return Array.from(new Set(allTags)).sort();
+};
