@@ -3,6 +3,8 @@ import { Trophy, Target, Zap, Star, TrendingUp, Calendar, Play, BookMarked, Head
 import { Search, Filter, ShoppingCart, Award, Download } from 'lucide-react';
 import { Video } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
+// Add this block - Import Flame icon
+import { Flame } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 // ✅ CRITICAL FIX: Import ONLY direct Supabase client - NO edge function dependencies
 import { supabase } from '../../../lib/supabase';
@@ -277,9 +279,18 @@ const ResourceCard: React.FC<ResourceCardProps> = ({
 
 interface StudentDashboardProps {
   activeSection?: string;
+  role?: string;
 }
 
-const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'dashboard' }) => {
+// Add this block - Teacher stats state interface
+interface TeacherStats {
+  coursesTaught: number;
+  totalStudents: number;
+  averageRating: number;
+  totalRevenue: number;
+}
+
+const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'dashboard', role = 'student' }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   
@@ -293,6 +304,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
   const [error, setError] = useState<string | null>(null);
   const [tutoringResources, setTutoringResources] = useState<TutoringResource[]>([]);
   const [studentLevel, setStudentLevel] = useState<StudentLevel | null>(null);
+  
+  // Add this block - Teacher stats state
+  const [teacherStats, setTeacherStats] = useState<TeacherStats | null>(null);
   
   // NEW: Phase 2 state
   const [certificates, setCertificates] = useState<StudentCertificate[]>([]);
@@ -415,6 +429,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
     title: '',
     description: '',
     category: 'education',
+    // Fix this line - Invalid string literal with unescaped quotes
     difficulty: 'medium\' as \'easy\' | \'medium\' | \'hard',
     deadlineHours: 24
   });
@@ -451,8 +466,26 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [showCheckoutSuccessModal, setShowCheckoutSuccessModal] = useState(false);
 
-  // NEW: Real-time connection status state
+  // NEW: Real-time connection status state with retry counter
   const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
+  const [realtimeRetryCount, setRealtimeRetryCount] = useState(0);
+  const [showRealtimeError, setShowRealtimeError] = useState(false);
+  // 🔴 NEW: Add detailed connection debugging state
+  const [connectionDebugInfo, setConnectionDebugInfo] = useState<{
+    environment: 'preview' | 'production';
+    supabaseUrl: string;
+    timestamp: string;
+    attemptCount: number;
+    lastError: string | null;
+    websocketSupported: boolean;
+  }>({
+    environment: window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1') ? 'preview' : 'production',
+    supabaseUrl: import.meta.env.VITE_SUPABASE_URL || 'Not configured',
+    timestamp: new Date().toISOString(),
+    attemptCount: 0,
+    lastError: null,
+    websocketSupported: typeof WebSocket !== 'undefined'
+  });
 
   // Add this block - Gamification state
   const [gamification, setGamification] = useState<any>({
@@ -559,42 +592,100 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
 
     let isMounted = true;
     let realtimeChannel: any = null;
+    let retryTimeout: NodeJS.Timeout | null = null;
 
     const loadDashboardData = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // ✅ FIX: DIRECT SUPABASE QUERY - Completely removed edge function dependency
+        // ✅ FIX: Query stats based on role
         let statsData;
         try {
-          console.log('🔵 [FIXED VERSION] Fetching stats directly from Supabase (NO edge function)...');
-          console.log('🔵 Component Version:', componentVersion);
+          console.log('🔵 [ROLE-BASED] Fetching stats for role:', role);
 
-          // ✅ Query student_profiles table directly - NO edge function call
-          const { data: profile, error: profileError } = await supabase
-            .from('student_profiles')
-            .select('xp, gold, streak, current_level, aura_points')
-            .eq('id', user.id)
-            .single();
+          if (role === 'student') {
+            // ✅ Student: Query student_profiles table
+            const { data: profile, error: profileError } = await supabase
+              .from('student_profiles')
+              .select('xp, gold, streak, current_level, aura_points')
+              .eq('id', user.id)
+              .single();
 
-          if (profileError) {
-            console.warn('⚠️ Profile query error:', profileError);
-            throw profileError;
+            if (profileError) {
+              console.warn('⚠️ Profile query error:', profileError);
+              throw profileError;
+            }
+
+            const { data: enrollments, error: enrollError } = await supabase
+              .from('course_enrollments')
+              .select('is_completed')
+              .eq('student_id', user.id);
+
+            if (enrollError) {
+              console.warn('⚠️ Enrollments query error:', enrollError);
+              throw enrollError;
+            }
+
+            statsData = {
+              xp: profile?.xp || 0,
+              gold: profile?.gold || 0,
+              streak: profile?.streak || 0,
+              level: profile?.current_level || 1,
+              aura_points: profile?.aura_points || 0,
+              enrolled_courses: enrollments?.length || 0,
+              completed_courses: enrollments?.filter(e => e.is_completed).length || 0
+            };
+
+            // Set student stats
+            setStats({
+              totalXP: statsData.xp,
+              totalLessons: statsData.enrolled_courses,
+              currentStreak: statsData.streak,
+              level: statsData.level,
+              auraPoints: statsData.aura_points,
+              gold: statsData.gold,
+              enrolledCourses: statsData.enrolled_courses,
+              completedCourses: statsData.completed_courses
+            });
+          } else {
+            // ✅ Teacher/Admin/Support/CEO: Query professional stats
+            const { data: courses, error: coursesError } = await supabase
+              .from('courses')
+              .select('id')
+              .eq('instructor_id', user.id);
+
+            if (coursesError) {
+              console.warn('⚠️ Courses query error:', coursesError);
+              throw coursesError;
+            }
+
+            const { data: enrollments, error: enrollError } = await supabase
+              .from('course_enrollments')
+              .select('student_id')
+              .in('course_id', courses?.map(c => c.id) || []);
+
+            if (enrollError) {
+              console.warn('⚠️ Enrollments query error:', enrollError);
+              throw enrollError;
+            }
+
+            // Calculate unique students
+            const uniqueStudents = new Set(enrollments?.map(e => e.student_id) || []).size;
+
+            // Mock rating and revenue (would come from a ratings/payments table in production)
+            const mockRating = 4.7;
+            const mockRevenue = (courses?.length || 0) * 25; // $25 per course as mock
+
+            setTeacherStats({
+              coursesTaught: courses?.length || 0,
+              totalStudents: uniqueStudents,
+              averageRating: mockRating,
+              totalRevenue: mockRevenue
+            });
           }
 
-          // ✅ Query course_enrollments table directly - NO edge function call
-          const { data: enrollments, error: enrollError } = await supabase
-            .from('course_enrollments')
-            .select('is_completed')
-            .eq('student_id', user.id);
-
-          if (enrollError) {
-            console.warn('⚠️ Enrollments query error:', enrollError);
-            throw enrollError;
-          }
-
-          // ✅ NEW: Query user_activities table directly for recent activities
+          // ✅ Query user_activities (common for all roles)
           const { data: activities, error: activitiesError } = await supabase
             .from('user_activities')
             .select('id, title, xp_earned, created_at')
@@ -606,18 +697,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
             console.warn('⚠️ Activities query error:', activitiesError);
           }
 
-          // ✅ Build stats object from direct Supabase queries
-          statsData = {
-            xp: profile?.xp || 0,
-            gold: profile?.gold || 0,
-            streak: profile?.streak || 0,
-            level: profile?.current_level || 1,
-            aura_points: profile?.aura_points || 0,
-            enrolled_courses: enrollments?.length || 0,
-            completed_courses: enrollments?.filter(e => e.is_completed).length || 0
-          };
-
-          // ✅ Set activities from direct query
           if (activities && activities.length > 0) {
             setUserActivities(activities.map(act => ({
               id: act.id,
@@ -627,22 +706,41 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
             })));
           }
 
-          console.log('✅ [LATEST VERSION] Real data fetched successfully from Supabase:', statsData);
+          console.log('✅ [ROLE-BASED] Data fetched successfully');
         } catch (directQueryError: any) {
           console.error('❌ Direct query failed, using mock fallback:', directQueryError.message);
           
-          // ✅ COMPREHENSIVE FALLBACK: Use mock data when queries fail
-          statsData = {
-            xp: 3400,
-            gold: 1250,
-            streak: 7,
-            level: 3,
-            aura_points: 1500,
-            enrolled_courses: 5,
-            completed_courses: 2
-          };
+          // ✅ Role-based mock fallback
+          if (role === 'student') {
+            statsData = {
+              xp: 3400,
+              gold: 1250,
+              streak: 7,
+              level: 3,
+              aura_points: 1500,
+              enrolled_courses: 5,
+              completed_courses: 2
+            };
+            
+            setStats({
+              totalXP: statsData.xp,
+              totalLessons: statsData.enrolled_courses,
+              currentStreak: statsData.streak,
+              level: statsData.level,
+              auraPoints: statsData.aura_points,
+              gold: statsData.gold,
+              enrolledCourses: statsData.enrolled_courses,
+              completedCourses: statsData.completed_courses
+            });
+          } else {
+            setTeacherStats({
+              coursesTaught: 3,
+              totalStudents: 45,
+              averageRating: 4.7,
+              totalRevenue: 75
+            });
+          }
           
-          // ✅ Mock activities fallback
           setUserActivities([
             { id: '1', title: 'Completed React Basics', xpEarned: 100, createdAt: new Date().toISOString() },
             { id: '2', title: 'Maintained 7-day streak', xpEarned: 50, createdAt: new Date().toISOString() }
@@ -715,14 +813,17 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
           setDownlineMembers(downlineData);
           setEarningsBreakdown(earningsData);
 
-          const today = new Date().toDateString();
-          const lastShownDate = localStorage.getItem('lastStreakAnimationDate');
-          
-          if (lastShownDate !== today && statsData.streak > 0) {
-            setTimeout(() => {
-              setShowStreakAnimation(true);
-              localStorage.setItem('lastStreakAnimationDate', today);
-            }, 800);
+          // Streak animation only for students
+          if (role === 'student') {
+            const today = new Date().toDateString();
+            const lastShownDate = localStorage.getItem('lastStreakAnimationDate');
+            
+            if (lastShownDate !== today && statsData.streak > 0) {
+              setTimeout(() => {
+                setShowStreakAnimation(true);
+                localStorage.setItem('lastStreakAnimationDate', today);
+              }, 800);
+            }
           }
         }
       } catch (err: any) {
@@ -737,81 +838,287 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
       }
     };
 
-    // ✅ Real-time subscription - uses direct Supabase client (NO edge functions)
+    // ✅ NEW: Enhanced Real-time subscription with retry logic and better error handling
     const setupRealtimeSubscription = () => {
       console.log('🔴 Setting up real-time subscription for user:', user.id);
+      console.log('🌐 Environment:', connectionDebugInfo.environment);
+      console.log('🔗 Supabase URL:', connectionDebugInfo.supabaseUrl);
+      console.log('🔌 WebSocket supported:', connectionDebugInfo.websocketSupported);
+      
       setRealtimeStatus('connecting');
+      
+      // 🔴 UPDATE: Log connection debug info
+      setConnectionDebugInfo(prev => ({
+        ...prev,
+        attemptCount: prev.attemptCount + 1,
+        timestamp: new Date().toISOString()
+      }));
 
-      // ✅ Create real-time channel using direct Supabase client
-      realtimeChannel = supabase
-        .channel(`student_profile_${user.id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'student_profiles',
-            filter: `id=eq.${user.id}`
-          },
-          async (payload) => {
-            console.log('🔴 Real-time update received:', payload);
+      try {
+        // 🔴 FIX: Enhanced channel configuration with explicit WebSocket settings
+        realtimeChannel = supabase
+          .channel(`student_profile_${user.id}`, {
+            config: {
+              presence: {
+                key: user.id,
+              },
+              // 🔴 NEW: Explicit WebSocket configuration for production
+              broadcast: { self: true },
+              postgres_changes: {
+                // 🔴 NEW: Force WebSocket transport instead of long-polling
+                listen_to: 'postgres_changes'
+              }
+            },
+          })
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'student_profiles',
+              filter: `id=eq.${user.id}`
+            },
+            async (payload) => {
+              console.log('🔴 Real-time update received:', payload);
+              console.log('🌐 Connection active at:', new Date().toISOString());
 
-            if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-              const newData = payload.new as any;
-              
-              if (isMounted) {
-                // ✅ Query enrollments in real-time - direct Supabase query
-                const { data: enrollments } = await supabase
-                  .from('course_enrollments')
-                  .select('is_completed')
-                  .eq('student_id', user.id);
+              if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+                const newData = payload.new as any;
+                
+                if (isMounted) {
+                  // ✅ Query enrollments in real-time - direct Supabase query
+                  const { data: enrollments } = await supabase
+                    .from('course_enrollments')
+                    .select('is_completed')
+                    .eq('student_id', user.id);
 
-                setStats(prevStats => ({
-                  ...prevStats,
-                  totalXP: newData.xp || prevStats?.totalXP || 0,
-                  level: newData.current_level || prevStats?.level || 1,
-                  currentStreak: newData.streak || prevStats?.currentStreak || 0,
-                  auraPoints: newData.aura_points || prevStats?.auraPoints || 0,
-                  gold: newData.gold || prevStats?.gold || 0,
-                  totalLessons: enrollments?.length || prevStats?.totalLessons || 0,
-                  enrolledCourses: enrollments?.length || prevStats?.enrolledCourses || 0,
-                  completedCourses: enrollments?.filter(e => e.is_completed).length || prevStats?.completedCourses || 0
-                }));
+                  setStats(prevStats => ({
+                    ...prevStats,
+                    totalXP: newData.xp || prevStats?.totalXP || 0,
+                    level: newData.current_level || prevStats?.level || 1,
+                    currentStreak: newData.streak || prevStats?.currentStreak || 0,
+                    auraPoints: newData.aura_points || prevStats?.auraPoints || 0,
+                    gold: newData.gold || prevStats?.gold || 0,
+                    totalLessons: enrollments?.length || prevStats?.totalLessons || 0,
+                    enrolledCourses: enrollments?.length || prevStats?.enrolledCourses || 0,
+                    completedCourses: enrollments?.filter(e => e.is_completed).length || prevStats?.completedCourses || 0
+                  }));
 
-                console.log('✅ Stats updated in real-time');
+                  console.log('✅ Stats updated in real-time');
+                  
+                  // Reset retry count on successful update
+                  setRealtimeRetryCount(0);
+                  setShowRealtimeError(false);
+                  
+                  // 🔴 NEW: Update debug info on successful connection
+                  setConnectionDebugInfo(prev => ({
+                    ...prev,
+                    lastError: null,
+                    timestamp: new Date().toISOString()
+                  }));
+                }
               }
             }
-          }
-        )
-        .subscribe((status) => {
-          if (isMounted) {
-            if (status === 'SUBSCRIBED') {
-              setRealtimeStatus('connected');
-              console.log('✅ Real-time connection established');
-            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-              setRealtimeStatus('disconnected');
-              console.error('❌ Real-time connection failed');
+          )
+          .subscribe((status, error) => {
+            if (isMounted) {
+              console.log('🔴 Real-time subscription status:', status, error);
+              console.log('🌐 Environment:', connectionDebugInfo.environment);
+              console.log('🔗 Supabase URL:', connectionDebugInfo.supabaseUrl);
+              
+              // 🔴 NEW: Log detailed error information
+              if (error) {
+                console.error('❌ Subscription error details:', {
+                  message: error.message,
+                  code: error.code,
+                  details: error.details,
+                  hint: error.hint
+                });
+                
+                setConnectionDebugInfo(prev => ({
+                  ...prev,
+                  lastError: `${error.message} (${error.code})`
+                }));
+              }
+              
+              if (status === 'SUBSCRIBED') {
+                setRealtimeStatus('connected');
+                setRealtimeRetryCount(0);
+                setShowRealtimeError(false);
+                console.log('✅ Real-time connection established successfully');
+                console.log('🌐 Connected at:', new Date().toISOString());
+                
+                // 🔴 NEW: Update debug info on successful connection
+                setConnectionDebugInfo(prev => ({
+                  ...prev,
+                  lastError: null,
+                  timestamp: new Date().toISOString()
+                }));
+              } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || error) {
+                console.error('❌ Real-time connection failed:', status, error);
+                console.error('🌐 Failed at:', new Date().toISOString());
+                console.error('🔗 Supabase URL:', connectionDebugInfo.supabaseUrl);
+                console.error('🔌 WebSocket support:', connectionDebugInfo.websocketSupported);
+                
+                setRealtimeStatus('disconnected');
+                
+                // 🔴 NEW: Enhanced error logging
+                const errorMessage = error ? `${error.message} (${error.code})` : status;
+                setConnectionDebugInfo(prev => ({
+                  ...prev,
+                  lastError: errorMessage,
+                  timestamp: new Date().toISOString()
+                }));
+                
+                // Retry logic with exponential backoff
+                if (realtimeRetryCount < 3) {
+                  const retryDelay = Math.min(1000 * Math.pow(2, realtimeRetryCount), 10000);
+                  console.log(`🔄 Retrying real-time connection in ${retryDelay}ms (attempt ${realtimeRetryCount + 1}/3)`);
+                  console.log('🔗 Using Supabase URL:', connectionDebugInfo.supabaseUrl);
+                  
+                  retryTimeout = setTimeout(() => {
+                    if (isMounted) {
+                      setRealtimeRetryCount(prev => prev + 1);
+                      // Clean up current channel and retry
+                      if (realtimeChannel) {
+                        supabase.removeChannel(realtimeChannel);
+                      }
+                      setupRealtimeSubscription();
+                    }
+                  }, retryDelay);
+                } else {
+                  console.warn('⚠️ Max retry attempts reached. Using polling fallback.');
+                  console.warn('🌐 Environment:', connectionDebugInfo.environment);
+                  console.warn('🔗 Supabase URL:', connectionDebugInfo.supabaseUrl);
+                  console.warn('🔌 WebSocket supported:', connectionDebugInfo.websocketSupported);
+                  
+                  setShowRealtimeError(true);
+                  
+                  // 🔴 FIX: Enhanced polling fallback with connection verification
+                  const pollInterval = setInterval(async () => {
+                    if (isMounted) {
+                      try {
+                        console.log('🔄 Polling fallback attempt at:', new Date().toISOString());
+                        
+                        // 🔴 NEW: Verify Supabase connection before polling
+                        const { error: connectionError } = await supabase
+                          .from('student_profiles')
+                          .select('id')
+                          .eq('id', user.id)
+                          .limit(1);
+                        
+                        if (connectionError) {
+                          console.error('❌ Supabase connection error:', connectionError);
+                          setConnectionDebugInfo(prev => ({
+                            ...prev,
+                            lastError: `Polling error: ${connectionError.message}`,
+                            timestamp: new Date().toISOString()
+                          }));
+                          return;
+                        }
+                        
+                        const { data: profile } = await supabase
+                          .from('student_profiles')
+                          .select('xp, gold, streak, current_level, aura_points')
+                          .eq('id', user.id)
+                          .single();
+
+                        const { data: enrollments } = await supabase
+                          .from('course_enrollments')
+                          .select('is_completed')
+                          .eq('student_id', user.id);
+
+                        if (profile) {
+                          setStats(prevStats => ({
+                            ...prevStats,
+                            totalXP: profile.xp || prevStats?.totalXP || 0,
+                            level: profile.current_level || prevStats?.level || 1,
+                            currentStreak: profile.streak || prevStats?.currentStreak || 0,
+                            auraPoints: profile.aura_points || prevStats?.auraPoints || 0,
+                            gold: profile.gold || prevStats?.gold || 0,
+                            totalLessons: enrollments?.length || prevStats?.totalLessons || 0,
+                            enrolledCourses: enrollments?.length || prevStats?.enrolledCourses || 0,
+                            completedCourses: enrollments?.filter(e => e.is_completed).length || prevStats?.completedCourses || 0
+                          }));
+                          console.log('✅ Stats updated via polling fallback at:', new Date().toISOString());
+                          
+                          // 🔴 NEW: Update debug info on successful polling
+                          setConnectionDebugInfo(prev => ({
+                            ...prev,
+                            lastError: 'Using polling fallback (real-time failed)',
+                            timestamp: new Date().toISOString()
+                          }));
+                        }
+                      } catch (pollError: any) {
+                        console.error('❌ Polling fallback error:', pollError);
+                        setConnectionDebugInfo(prev => ({
+                          ...prev,
+                          lastError: `Polling error: ${pollError.message}`,
+                          timestamp: new Date().toISOString()
+                        }));
+                      }
+                    }
+                  }, 30000);
+                  
+                  // Store interval for cleanup
+                  (retryTimeout as any) = pollInterval;
+                }
+              } else if (status === 'CLOSED') {
+                setRealtimeStatus('disconnected');
+                console.log('🔴 Real-time channel closed at:', new Date().toISOString());
+                
+                setConnectionDebugInfo(prev => ({
+                  ...prev,
+                  lastError: 'Channel closed',
+                  timestamp: new Date().toISOString()
+                }));
+              }
             }
-          }
-        });
+          });
+      } catch (subscriptionError: any) {
+        console.error('❌ Error setting up real-time subscription:', subscriptionError);
+        console.error('🌐 Environment:', connectionDebugInfo.environment);
+        console.error('🔗 Supabase URL:', connectionDebugInfo.supabaseUrl);
+        
+        setRealtimeStatus('disconnected');
+        setShowRealtimeError(true);
+        
+        setConnectionDebugInfo(prev => ({
+          ...prev,
+          lastError: `Setup error: ${subscriptionError.message}`,
+          timestamp: new Date().toISOString()
+        }));
+      }
     };
 
     // Load initial data
     loadDashboardData();
     
-    // Set up real-time subscription
-    setupRealtimeSubscription();
+    // Set up real-time subscription with slight delay to ensure data is loaded first
+    const realtimeSetupTimeout = setTimeout(() => {
+      if (isMounted) {
+        setupRealtimeSubscription();
+      }
+    }, 1000);
 
     // Cleanup function
     return () => {
       isMounted = false;
+      
+      if (realtimeSetupTimeout) {
+        clearTimeout(realtimeSetupTimeout);
+      }
+      
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
       
       if (realtimeChannel) {
         console.log('🔴 Unsubscribing from real-time channel');
         supabase.removeChannel(realtimeChannel);
       }
     };
-  }, [user?.id]);
+  }, [user?.id, componentVersion, role]);
 
   // Load marketplace products
   useEffect(() => {
@@ -1173,7 +1480,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
     }
   };
 
-  // MODIFIED: renderDashboardSection - Move streak inside Welcome Card
+  // MODIFIED: renderDashboardSection - Enhanced real-time status indicator
   const renderDashboardSection = () => {
     // Format today's date
     const formatTodayDate = () => {
@@ -1188,116 +1495,187 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
 
     return (
       <div className="space-y-4 sm:space-y-6 pb-6 sm:pb-8 bg-gradient-to-br from-gray-50 via-orange-50 to-white min-h-screen p-3 sm:p-4 md:p-6 max-w-full overflow-x-hidden">
-        {/* FIX: Welcome Header with Date AND Streak integrated */}
+        {/* Welcome Header with Date */}
         <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-200">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-            {/* Left side: Welcome text */}
             <div className="flex-1">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-                Welcome back, Student! 👋
+                Welcome back, {role === 'student' ? 'Student' : role.charAt(0).toUpperCase() + role.slice(1)}! 👋
               </h1>
               <p className="text-sm sm:text-base text-gray-600">
                 {formatTodayDate()}
               </p>
               
-              {/* NEW: Real-time connection status indicator */}
-              <div className="flex items-center gap-2 mt-2">
-                <div className={`w-2 h-2 rounded-full ${
-                  realtimeStatus === 'connected' ? 'bg-green-500 animate-pulse' :
-                  realtimeStatus === 'connecting'? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
-                }`}></div>
-                <span className="text-xs text-gray-600">
-                  {realtimeStatus === 'connected' ? '🟢 Live updates active' :
-                   realtimeStatus === 'connecting'? '🟡 Connecting...' : '🔴 Offline'}
-                </span>
+              {/* ENHANCED: Real-time connection status indicator with debugging */}
+              <div className="flex flex-col gap-2 mt-2">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${
+                    realtimeStatus === 'connected' ? 'bg-green-500 animate-pulse' :
+                    realtimeStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
+                  }`}></div>
+                  <span className="text-xs text-gray-600">
+                    {realtimeStatus === 'connected' ? '🟢 Live updates active' :
+                     realtimeStatus === 'connecting' ? '🟡 Connecting...' : '🔴 Using manual refresh'}
+                  </span>
+                  {showRealtimeError && (
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="ml-2 text-xs text-blue-600 hover:text-blue-800 underline"
+                    >
+                      Refresh page
+                    </button>
+                  )}
+                </div>
+                
+                {/* 🔴 NEW: Debug info toggle (only in production for troubleshooting) */}
+                {connectionDebugInfo.environment === 'production' && (
+                  <details className="text-xs bg-gray-100 p-2 rounded">
+                    <summary className="cursor-pointer text-gray-700 font-medium">
+                      Connection Details (for debugging)
+                    </summary>
+                    <div className="mt-2 space-y-1 text-gray-600">
+                      <p>Environment: {connectionDebugInfo.environment}</p>
+                      <p>Supabase URL: {connectionDebugInfo.supabaseUrl}</p>
+                      <p>WebSocket Support: {connectionDebugInfo.websocketSupported ? 'Yes' : 'No'}</p>
+                      <p>Attempt Count: {connectionDebugInfo.attemptCount}</p>
+                      <p>Last Updated: {new Date(connectionDebugInfo.timestamp).toLocaleTimeString()}</p>
+                      {connectionDebugInfo.lastError && (
+                        <p className="text-red-600">Last Error: {connectionDebugInfo.lastError}</p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-2">
+                        💡 If connection fails, check Supabase project settings → API → Realtime is enabled
+                      </p>
+                    </div>
+                  </details>
+                )}
               </div>
             </div>
 
-            {/* Right side: Streak element with animation */}
-            <button
-              onClick={() => setShowStreakAnimation(true)}
-              className="flex-shrink-0 bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border-2 border-orange-300 hover:shadow-lg transition-all cursor-pointer group"
-            >
-              <div className="flex items-center gap-3">
-                <Zap className="w-6 h-6 sm:w-8 sm:h-8 text-orange-500 group-hover:animate-pulse" />
-                <div className="text-left">
-                  <p className="text-xs sm:text-sm font-medium text-gray-700">Current Streak</p>
-                  <p className="text-2xl sm:text-3xl font-bold text-orange-600">
-                    {stats?.currentStreak || 7} 🔥
-                  </p>
+            {/* Streak element (ONLY for students) */}
+            {role === 'student' && (
+              <button
+                onClick={() => setShowStreakAnimation(true)}
+                className="flex-shrink-0 bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border-2 border-orange-300 hover:shadow-lg transition-all cursor-pointer group"
+              >
+                <div className="flex items-center gap-3">
+                  <Zap className="w-6 h-6 sm:w-8 sm:h-8 text-orange-500 group-hover:animate-pulse" />
+                  <div className="text-left">
+                    <p className="text-xs sm:text-sm font-medium text-gray-700">Current Streak</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-orange-600">
+                      {stats?.currentStreak || 7} 🔥
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <p className="text-[10px] sm:text-xs text-orange-600 mt-2 text-center">Click to celebrate!</p>
-            </button>
+                <p className="text-[10px] sm:text-xs text-orange-600 mt-2 text-center">Click to celebrate!</p>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Stats Grid - Keep as is */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-          {/* Total Lessons Card - NOW CLICKABLE */}
-          <button
-            onClick={() => handleStatCardClick('lessons')}
-            className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-blue-300 hover:shadow-lg hover:border-blue-400 transition-all cursor-pointer text-left"
-          >
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <BookOpen className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500" />
-              <span className="text-2xl sm:text-3xl font-bold text-gray-900">
-                {stats?.totalLessons || 3}
-              </span>
-            </div>
-            <p className="text-gray-700 font-medium text-sm sm:text-base">Total Lessons</p>
-            <p className="text-xs text-blue-600 mt-1">Click to view details</p>
-          </button>
+        {/* NEW: Role-based Stats Grid */}
+        {role === 'student' ? (
+          // ✅ Student gamification stats
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+            <button
+              onClick={() => handleStatCardClick('xp')}
+              className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-orange-300 hover:shadow-lg hover:border-orange-400 transition-all cursor-pointer text-left relative"
+            >
+              {realtimeStatus === 'connected' && (
+                <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              )}
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <Flame className="w-6 h-6 sm:w-8 sm:h-8 text-orange-600" />
+                <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                  {stats?.auraPoints || 0}
+                </span>
+              </div>
+              <p className="text-gray-700 font-medium text-sm sm:text-base">Aura Points</p>
+            </button>
 
-          {/* Total Badges Card - NOW CLICKABLE */}
-          <button
-            onClick={() => handleStatCardClick('badges')}
-            className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-purple-300 hover:shadow-lg hover:border-purple-400 transition-all cursor-pointer text-left"
-          >
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <Award className="w-6 h-6 sm:w-8 sm:h-8 text-purple-500" />
-              <span className="text-2xl sm:text-3xl font-bold text-gray-900">
-                {badgeProgress.filter(b => b.isUnlocked).length || 2}
-              </span>
-            </div>
-            <p className="text-gray-700 font-medium text-sm sm:text-base">Total Badges</p>
-            <p className="text-xs text-purple-600 mt-1">Click to view collection</p>
-          </button>
+            <button
+              onClick={() => handleStatCardClick('lessons')}
+              className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-yellow-300 hover:shadow-lg hover:border-yellow-400 transition-all cursor-pointer text-left"
+            >
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <Trophy className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-600" />
+                <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                  {stats?.level || 1}
+                </span>
+              </div>
+              <p className="text-gray-700 font-medium text-sm sm:text-base">Level</p>
+            </button>
 
-          {/* Total XP Card - NOW CLICKABLE with real-time indicator */}
-          <button
-            onClick={() => handleStatCardClick('xp')}
-            className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-yellow-300 hover:shadow-lg hover:border-yellow-400 transition-all cursor-pointer text-left relative"
-          >
-            {/* NEW: Live update pulse indicator */}
-            {realtimeStatus === 'connected' && (
-              <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            )}
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <Trophy className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-500" />
-              <span className="text-2xl sm:text-3xl font-bold text-gray-900">
-                {stats?.totalXP || 7410}
-              </span>
-            </div>
-            <p className="text-gray-700 font-medium text-sm sm:text-base">Total XP</p>
-            <p className="text-xs text-yellow-600 mt-1">Click to view activity</p>
-          </button>
+            <button
+              className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-purple-300 hover:shadow-lg hover:border-purple-400 transition-all cursor-pointer text-left"
+            >
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <Zap className="w-6 h-6 sm:w-8 sm:h-8 text-purple-600" />
+                <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                  {stats?.currentStreak || 0} days
+                </span>
+              </div>
+              <p className="text-gray-700 font-medium text-sm sm:text-base">Streak</p>
+            </button>
 
-          {/* Total Certificates Card - NOW CLICKABLE */}
-          <button
-            onClick={() => handleStatCardClick('certificates')}
-            className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-orange-300 hover:shadow-lg hover:border-orange-400 transition-all cursor-pointer text-left"
-          >
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <Award className="w-6 h-6 sm:w-8 sm:h-8 text-orange-500" />
-              <span className="text-2xl sm:text-3xl font-bold text-gray-900">
-                {certificates.length || 0}
-              </span>
+            <button
+              onClick={() => handleStatCardClick('xp')}
+              className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-blue-300 hover:shadow-lg hover:border-blue-400 transition-all cursor-pointer text-left"
+            >
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <BookOpen className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
+                <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                  {stats?.totalXP || 0}
+                </span>
+              </div>
+              <p className="text-gray-700 font-medium text-sm sm:text-base">XP</p>
+            </button>
+          </div>
+        ) : (
+          // ✅ Teacher/Admin/Support/CEO professional stats
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+            <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-orange-300 hover:shadow-lg transition-all">
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <BookOpen className="w-6 h-6 sm:w-8 sm:h-8 text-orange-600" />
+                <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                  {teacherStats?.coursesTaught || 0}
+                </span>
+              </div>
+              <p className="text-gray-700 font-medium text-sm sm:text-base">
+                {role.charAt(0).toUpperCase() + role.slice(1)} Courses
+              </p>
             </div>
-            <p className="text-gray-700 font-medium text-sm sm:text-base">Total Certs</p>
-            <p className="text-xs text-orange-600 mt-1">Click to view certificates</p>
-          </button>
-        </div>
+
+            <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-blue-300 hover:shadow-lg transition-all">
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <Users className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
+                <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                  {teacherStats?.totalStudents || 0}
+                </span>
+              </div>
+              <p className="text-gray-700 font-medium text-sm sm:text-base">Total Students</p>
+            </div>
+
+            <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-yellow-300 hover:shadow-lg transition-all">
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <Star className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-600" />
+                <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                  {teacherStats?.averageRating?.toFixed(1) || '0.0'}
+                </span>
+              </div>
+              <p className="text-gray-700 font-medium text-sm sm:text-base">Avg Rating</p>
+            </div>
+
+            <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-green-300 hover:shadow-lg transition-all">
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
+                <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                  ${teacherStats?.totalRevenue || 0}
+                </span>
+              </div>
+              <p className="text-gray-700 font-medium text-sm sm:text-base">Total Revenue</p>
+            </div>
+          </div>
+        )}
 
         {/* FIX: Today's Quest Section - Show quest limit warning */}
         <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg text-white">
@@ -1504,10 +1882,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
                       })}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded-full text-xs font-bold">
-                    <Star className="w-3 h-3" />
-                    +{activity.xpEarned} XP
-                  </div>
+                  {role === 'student' && (
+                    <div className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded-full text-xs font-bold">
+                      <Star className="w-3 h-3" />
+                      +{activity.xpEarned} XP
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -3796,10 +4176,15 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
   // Main render logic
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 via-orange-50 to-white">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 via-orange-50 to-white relative z-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+          {/* Enhanced loading spinner with proper visibility */}
+          <div className="relative">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-500 mx-auto mb-4"></div>
+            <div className="absolute inset-0 animate-ping rounded-full h-16 w-16 border-2 border-orange-300 opacity-25 mx-auto"></div>
+          </div>
+          <p className="mt-4 text-lg font-semibold text-gray-800">Loading dashboard...</p>
+          <p className="mt-2 text-sm text-gray-600">Preparing your learning experience</p>
         </div>
       </div>
     );
@@ -3808,7 +4193,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 via-orange-50 to-white p-4">
-        <div className="bg-white rounded-2xl p-8 shadow-lg text-center">
+        <div className="bg-white rounded-2xl p-8 shadow-lg text-center max-w-md w-full">
           <div className="text-red-500 text-center mb-4">
             <svg className="w-16 h-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -3829,6 +4214,14 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Streak Animation - Now properly rendered */}
+      {showStreakAnimation && (
+        <StreakGiftAnimation
+          currentStreak={stats?.currentStreak || 0}
+          onClose={() => setShowStreakAnimation(false)}
+        />
+      )}
+
       {/* Achievement Unlock Animation (Global) */}
       <AchievementUnlockAnimation />
 

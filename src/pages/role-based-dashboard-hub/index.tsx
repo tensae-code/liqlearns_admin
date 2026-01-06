@@ -125,7 +125,7 @@ const RoleBasedDashboardHub: React.FC = () => {
     isAuthenticated: true
   };
 
-  // CRITICAL FIX: Determine which dashboard to show based on userProfile.role
+  // MODIFIED: Pass role to StudentDashboard
   const renderDashboard = () => {
     const roleKey = userProfile?.role?.toLowerCase() || 'student';
 
@@ -133,17 +133,16 @@ const RoleBasedDashboardHub: React.FC = () => {
       case 'admin':
         return <AdminDashboard activeSection={activeSection} />;
       case 'student':
-        return <StudentDashboard activeSection={activeSection} />;
-      case 'teacher': case'tutor':
+        return <StudentDashboard activeSection={activeSection} role={roleKey} />;
+      case 'teacher': case 'tutor':
         return <TeacherDashboard activeSection={activeSection} />;
       case 'support':
         return <SupportDashboard />;
       case 'ceo':
         return <CEODashboard activeSection={activeSection} />;
       default:
-        // CRITICAL FIX: If role is invalid, show student dashboard as fallback
         console.warn(`Unknown role: ${roleKey}, defaulting to student dashboard`);
-        return <StudentDashboard activeSection={activeSection} />;
+        return <StudentDashboard activeSection={activeSection} role="student" />;
     }
   };
 
