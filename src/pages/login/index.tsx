@@ -151,7 +151,7 @@ const SignupForm = () => {
     policiesAccepted: '',
     sponsorName: '',
     applicationData: null as any,
-    verificationType: 'phone\' as \'phone\' | \'email',
+    verificationType: 'phone' as 'phone' | 'email',
   });
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [twoFactorVerified, setTwoFactorVerified] = useState(false);

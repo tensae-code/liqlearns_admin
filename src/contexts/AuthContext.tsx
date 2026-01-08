@@ -180,6 +180,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) throw error;
+      if (!data.user) {
+        throw new Error('User not returned after sign up.');
+      }
+
+      const profilePayload = {
+        user_id: data.user.id,
+        email,
+        full_name: options?.data?.full_name,
+        username: options?.data?.username,
+        phone: options?.data?.phone,
+        role: options?.data?.role,
+        sponsor_name: options?.data?.sponsor_name,
+        date_of_birth: options?.data?.date_of_birth,
+        address: options?.data?.address,
+        country: options?.data?.country,
+        state: options?.data?.state,
+        city: options?.data?.city
+      };
+
+      const { data: profileData, error: profileError } = await supabase.functions.invoke(
+        'create-user-profile',
+        {
+          body: profilePayload
+        }
+      );
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      if (profileData?.error) {
+        throw new Error(profileData.error);
+      }
 
       // STRIPE INTEGRATION REMOVED: Stripe customer creation code removed
       // User profiles are now created automatically by database triggers
