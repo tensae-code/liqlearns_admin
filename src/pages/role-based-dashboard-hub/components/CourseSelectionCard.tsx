@@ -9,9 +9,9 @@ export interface CourseOption {
   type: string;
   icon: LucideIcon;
   color: string;
-  skillCount: number;
-  difficulty: 'beginner' | 'intermediate' | 'advanced';
-  estimatedTime: string;
+  skillCount?: number;
+  difficulty?: 'beginner' | 'intermediate' | 'advanced';
+  estimatedTime?: string;
   description?: string; // REMOVED: No longer display description text as per user requirements
 }
 
@@ -69,15 +69,21 @@ const CourseSelectionCard: React.FC<CourseSelectionCardProps> = ({
 
         {/* Course Meta Info */}
         <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm mt-3 sm:mt-4">
-          <span className="px-2 py-0.5 sm:py-1 bg-white/20 backdrop-blur-sm rounded-full">
-            {course.skillCount} skills
-          </span>
-          <span className={`px-2 py-0.5 sm:py-1 rounded-full font-medium ${difficultyColors[course.difficulty]} bg-opacity-90`}>
-            {course.difficulty}
-          </span>
-          <span className="px-2 py-0.5 sm:py-1 bg-white/20 backdrop-blur-sm rounded-full">
-            {course.estimatedTime}
-          </span>
+          {typeof course.skillCount === 'number' && (
+            <span className="px-2 py-0.5 sm:py-1 bg-white/20 backdrop-blur-sm rounded-full">
+              {course.skillCount} skills
+            </span>
+          )}
+          {course.difficulty && (
+            <span className={`px-2 py-0.5 sm:py-1 rounded-full font-medium ${difficultyColors[course.difficulty]} bg-opacity-90`}>
+              {course.difficulty}
+            </span>
+          )}
+          {course.estimatedTime && (
+            <span className="px-2 py-0.5 sm:py-1 bg-white/20 backdrop-blur-sm rounded-full">
+              {course.estimatedTime}
+            </span>
+          )}
         </div>
 
         {/* Hover Effect Arrow */}

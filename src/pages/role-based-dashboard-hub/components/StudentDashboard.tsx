@@ -3,6 +3,7 @@ import { Trophy, Target, Zap, Star, TrendingUp, Calendar, Play, BookMarked, Head
 import { Search, Filter, ShoppingCart, Award, Download } from 'lucide-react';
 import { Video } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 // Add this block - Import Flame icon and toast
 import { Flame } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
@@ -83,75 +84,24 @@ interface UserActivity {
   createdAt: string;
 }
 
-// NEW: Add courseOptions constant at the top level
-const courseOptions = [
-  {
-    id: '1',
-    name: 'Amharic Language',
-    type: 'amharic',
-    icon: BookOpen,
-    color: 'bg-gradient-to-br from-orange-500 to-orange-600',
-    skillCount: 12,
-    difficulty: 'intermediate' as const,
-    estimatedTime: '6 months',
-    description: 'Master Amharic from basics to advanced conversation'
-  },
-  {
-    id: '2',
-    name: 'Ethiopian Culture',
-    type: 'culture',
-    icon: Users,
-    color: 'bg-gradient-to-br from-green-500 to-green-600',
-    skillCount: 8,
-    difficulty: 'beginner' as const,
-    estimatedTime: '3 months',
-    description: 'Explore Ethiopian traditions, history, and customs'
-  },
-  {
-    id: '3',
-    name: 'Mathematics',
-    type: 'mathematics',
-    icon: Target,
-    color: 'bg-gradient-to-br from-blue-500 to-blue-600',
-    skillCount: 15,
-    difficulty: 'advanced' as const,
-    estimatedTime: '12 months',
-    description: 'From basic arithmetic to advanced mathematics'
-  },
-  {
-    id: '4',
-    name: 'Science',
-    type: 'science',
-    icon: Zap,
-    color: 'bg-gradient-to-br from-purple-500 to-purple-600',
-    skillCount: 10,
-    difficulty: 'intermediate' as const,
-    estimatedTime: '8 months',
-    description: 'Physics, Chemistry, and Biology fundamentals'
-  },
-  {
-    id: '5',
-    name: 'English Language',
-    type: 'english',
-    icon: Type,
-    color: 'bg-gradient-to-br from-red-500 to-red-600',
-    skillCount: 14,
-    difficulty: 'beginner' as const,
-    estimatedTime: '6 months',
-    description: 'English reading, writing, and conversation skills'
-  },
-  {
-    id: '6',
-    name: 'Technology & Coding',
-    type: 'technology',
-    icon: Trophy,
-    color: 'bg-gradient-to-br from-indigo-500 to-indigo-600',
-    skillCount: 20,
-    difficulty: 'advanced' as const,
-    estimatedTime: '12 months',
-    description: 'Programming, web development, and computer science'
-  }
-];
+const courseTypeStyles: Record<string, { icon: LucideIcon; color: string }> = {
+  amharic: { icon: BookOpen, color: 'bg-gradient-to-br from-orange-500 to-orange-600' },
+  culture: { icon: Users, color: 'bg-gradient-to-br from-green-500 to-green-600' },
+  mathematics: { icon: Target, color: 'bg-gradient-to-br from-blue-500 to-blue-600' },
+  science: { icon: Zap, color: 'bg-gradient-to-br from-purple-500 to-purple-600' },
+  english: { icon: Type, color: 'bg-gradient-to-br from-red-500 to-red-600' },
+  technology: { icon: Trophy, color: 'bg-gradient-to-br from-indigo-500 to-indigo-600' },
+  language: { icon: BookOpen, color: 'bg-gradient-to-br from-orange-500 to-orange-600' }
+};
+
+const courseDifficultyMap: Record<string, CourseOption['difficulty']> = {
+  easy: 'beginner',
+  medium: 'intermediate',
+  hard: 'advanced',
+  beginner: 'beginner',
+  intermediate: 'intermediate',
+  advanced: 'advanced'
+};
 
 // Circular Progress Component
 interface CircularProgressProps {
@@ -351,6 +301,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
   const [cartCount, setCartCount] = useState(0);
 
   // NEW: Course selection state
+  const [courseOptions, setCourseOptions] = useState<CourseOption[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
   const [showCourseDashboard, setShowCourseDashboard] = useState(false);
 
@@ -394,8 +345,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
   const [showStreakAnimation, setShowStreakAnimation] = useState(false);
   const [hasShownStreakToday, setHasShownStreakToday] = useState(false);
 
-  // NEW: State to store actual course mappings from database
-  const [realCourseIds, setRealCourseIds] = useState<Map<string, string>>(new Map());
 
   // Events section state
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -421,7 +370,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [panelContent, setPanelContent] = useState<{ title: string; component: React.ReactNode } | null>(null);
   const [profile, setProfile] = useState<any>(null);
-  const [activeCourses, setActiveCourses] = useState<any[]>([]);
 
   // NEW: Right sidebar state for course details
   const [showCourseDetailsSidebar, setShowCourseDetailsSidebar] = useState(false);
@@ -563,44 +511,52 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
         role: user.role || 'student'
       });
 
-      setActiveCourses([
-        {
-          id: '1',
-          title: 'Amharic Language',
-          description: 'Learn Amharic from basics to advanced',
-          progress: 45,
-          image_url: '/api/placeholder/400/200'
-        },
-        {
-          id: '2',
-          title: 'Mathematics',
-          description: 'Master mathematical concepts',
-          progress: 60,
-          image_url: '/api/placeholder/400/200'
-        }
-      ]);
     }
   }, [user?.id]);
 
-  // Load actual course IDs from database
+  const getCourseStyle = (courseType: string | null) => {
+    const style = courseType ? courseTypeStyles[courseType] : undefined;
+    return style || { icon: BookOpen, color: 'bg-gradient-to-br from-slate-500 to-slate-600' };
+  };
+
+  const formatEstimatedTime = (minutes: number | null) => {
+    if (!minutes || Number.isNaN(minutes)) return undefined;
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.round(minutes / 60);
+    return `${hours}h`;
+  };
+
+  // Load real courses from database
   useEffect(() => {
-    const loadRealCourseIds = async () => {
+    const loadCourses = async () => {
       try {
         const availableCourses = await courseContentService.getAvailableCourses();
-        const idMap = new Map<string, string>();
-        
-        availableCourses.forEach(course => {
-          idMap.set(course.type, course.id);
+
+        const formattedCourses: CourseOption[] = availableCourses.map((course) => {
+          const style = getCourseStyle(course.type);
+          const difficulty = course.difficultyLevel ? courseDifficultyMap[course.difficultyLevel] : undefined;
+
+          return {
+            id: course.id,
+            name: course.title,
+            type: course.type,
+            icon: style.icon,
+            color: style.color,
+            difficulty,
+            estimatedTime: formatEstimatedTime(course.estimatedDurationMinutes),
+            description: course.description ?? undefined
+          };
         });
-        
-        setRealCourseIds(idMap);
+
+        setCourseOptions(formattedCourses);
       } catch (err: any) {
-        console.error('Error loading course IDs:', err);
+        console.error('Error loading courses:', err);
       }
     };
 
-    loadRealCourseIds();
+    loadCourses();
   }, []);
+
 
   // ✅ FIX 2: Add real stats fetching with realtime subscription
   useEffect(() => {
@@ -1917,16 +1873,21 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
               Enroll
             </button>
           </div>
-          
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
-            {courseOptions.map((course) => (
-              <CourseSelectionCard
-                key={course.id}
-                course={course}
-                onSelect={handleCourseSelect}
-                isSelected={selectedCourseDetails?.type === course.type}
-              />
-            ))}
+            {courseOptions.length === 0 ? (
+              <div className="col-span-full text-center py-8 text-gray-600">
+                No active courses available yet.
+              </div>
+            ) : (
+              courseOptions.map((course) => (
+                <CourseSelectionCard
+                  key={course.id}
+                  course={course}
+                  onSelect={handleCourseSelect}
+                  isSelected={selectedCourseDetails?.type === course.type}
+                />
+              ))
+            )}
           </div>
         </div>
 
@@ -4141,7 +4102,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
             <CourseContentView
               course={selectedCourseDetails}
               onClose={handleCloseCourseDetails}
-              realCourseId={realCourseIds.get(selectedCourseDetails.type) || ''}
+              realCourseId={realCourseIds.get(selectedCourseDetails.id) || ''}
             />
           </div>
         </div>
@@ -4306,7 +4267,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
       {showStatCardModal && (
         <StatCardModal
           userId={user?.id || ''}
-          cardType={selectedStatCard}
+          type={selectedStatCard || 'xp'}
           onClose={handleCloseStatModal}
         />
       )}

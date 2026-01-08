@@ -1260,6 +1260,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
           {showStatCardModal && (
             <StatCardModal
               type={selectedStatCard}
+              userId={user?.id || ''}
               onClose={handleCloseStatModal}
             />
           )}

@@ -3,7 +3,7 @@ import { Video, VideoOff, Mic, MicOff, MessageSquare, Users, Heart, Gift, Pin, C
 import { studyRoomService, StudyRoom, StudyRoomParticipant, ChatMessage } from '../services/studyRoomService';
 import { useAuth } from '../contexts/AuthContext';
 import Peer from 'simple-peer';
-
+import { supabase } from '../lib/supabase';
 
 interface StudyRoomHubProps {
   userId?: string;
@@ -65,6 +65,24 @@ const StudyRoomHub: React.FC<StudyRoomHubProps> = ({ userId }) => {
       setLoading(false);
     }
   };
+  const getCurrentCourseTitle = async () => {
+    if (!user?.id) return null;
+
+    const { data, error } = await supabase
+      .from('course_enrollments')
+      .select('courses(title)')
+      .eq('student_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('Unable to load current course title:', error.message);
+      return null;
+    }
+
+    return data?.courses?.title ?? null;
+  };
 
   // Join room
   const handleJoinRoom = async (room: StudyRoom) => {
@@ -72,12 +90,12 @@ const StudyRoomHub: React.FC<StudyRoomHubProps> = ({ userId }) => {
     
     try {
       setLoading(true);
-      
+      const currentCourseTitle = await getCurrentCourseTitle();
       // Join the room in database
       await studyRoomService.joinRoom(room.id, {
         display_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Student',
         avatar_url: user.user_metadata?.avatar_url,
-        current_course: 'Mathematics Advanced' // Get from user profile
+        current_course: currentCourseTitle
       });
 
       setCurrentRoom(room);

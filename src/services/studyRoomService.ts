@@ -203,16 +203,21 @@ class StudyRoomService {
 
       const { data, error } = await supabase
         .from('study_room_participants')
-        .insert({
-          room_id: roomId,
-          student_id: user.id,
-          display_name: participantInfo.display_name,
-          avatar_url: participantInfo.avatar_url || null,
-          current_course: participantInfo.current_course || null,
-          camera_enabled: false,
-          microphone_enabled: false,
-        })
-        .select()
+        .upsert(
+          {
+            room_id: roomId,
+            student_id: user.id,
+            display_name: participantInfo.display_name,
+            avatar_url: participantInfo.avatar_url || null,
+            current_course: participantInfo.current_course || null,
+            camera_enabled: false,
+            microphone_enabled: false,
+            left_at: null
+          },
+          { onConflict: 'room_id,student_id' }
+        )
+
+       .select()
         .single();
 
       if (error) throw error;
