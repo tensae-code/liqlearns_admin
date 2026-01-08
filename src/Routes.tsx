@@ -14,6 +14,7 @@ import CheckoutPage from './pages/checkout';
 import CheckoutSuccessPage from './pages/checkout/success';
 import SearchPage from './pages/search-results-discovery-hub';
 
+
 const RoutesContent: React.FC = () => {
   useGoogleAnalytics();
 

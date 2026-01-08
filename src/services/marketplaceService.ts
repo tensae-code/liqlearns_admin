@@ -633,7 +633,101 @@ class MarketplaceService {
   }
 }
 
-export const marketplaceService = new MarketplaceService();
+export const marketplaceService = {
+  async getItems(filters?: {
+    category?: string;
+    search?: string;
+    minPrice?: number;
+    maxPrice?: number;
+  }): Promise<MarketplaceItem[]> {
+    try {
+      let query = supabase
+        .from('marketplace_items')
+        .select(`
+          *,
+          seller:seller_id (
+            id,
+            full_name,
+            avatar_url
+          )
+        `)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false });
+
+      if (filters?.category && filters.category !== 'all') {
+        query = query.eq('category', filters.category);
+      }
+
+      if (filters?.search) {
+        query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+      }
+
+      if (filters?.minPrice !== undefined) {
+        query = query.gte('price', filters.minPrice);
+      }
+
+      if (filters?.maxPrice !== undefined) {
+        query = query.lte('price', filters.maxPrice);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Error fetching marketplace items:', error);
+        throw new Error(`Failed to fetch items: ${error.message}`);
+      }
+
+      return data || [];
+    } catch (error: any) {
+      console.error('Error in getItems:', error);
+      throw error;
+    }
+  },
+
+  async getCategoryCount(category: string): Promise<number> {
+    try {
+      const { count, error } = await supabase
+        .from('marketplace_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'approved')
+        .eq('category', category);
+
+      if (error) {
+        console.error(`Error counting ${category} items:`, error);
+        return 0;
+      }
+
+      return count || 0;
+    } catch (error: any) {
+      console.error(`Error in getCategoryCount for ${category}:`, error);
+      return 0;
+    }
+  },
+
+  async getAllCategoryCounts(): Promise<Record<string, number>> {
+    try {
+      const categories = ['books', 'courses', 'supplies', 'electronics', 'games', 'other'];
+      const counts: Record<string, number> = {};
+
+      // Fetch counts for all categories in parallel
+      const countPromises = categories.map(async (category) => {
+        const count = await this.getCategoryCount(category);
+        return { category, count };
+      });
+
+      const results = await Promise.all(countPromises);
+      
+      results.forEach(({ category, count }) => {
+        counts[category] = count;
+      });
+
+      return counts;
+    } catch (error: any) {
+      console.error('Error in getAllCategoryCounts:', error);
+      return {};
+    }
+  },
+};
 
 export const getMarketplaceItems = async (filters?: {
   category?: string;

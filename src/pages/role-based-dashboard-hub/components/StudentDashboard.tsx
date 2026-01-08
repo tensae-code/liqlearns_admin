@@ -295,6 +295,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
   const { user } = useAuth();
   const navigate = useNavigate();
   
+  // ✅ FIX 1: Move progressTab to top level (was inside renderProgressSection - HOOKS VIOLATION)
+  const [progressTab, setProgressTab] = useState<'skills' | 'syllabus' | 'attendance' | 'outcomes'>('skills');
+  
   // State declarations (already correct - keep as is)
   const [stats, setStats] = useState<StudentStats | null>(null);
   const [skillProgress, setSkillProgress] = useState<SkillProgress[]>([]);
@@ -598,6 +601,117 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
 
     loadRealCourseIds();
   }, []);
+
+  // ✅ FIX 2: Add real stats fetching with realtime subscription
+  useEffect(() => {
+    if (!user?.id) return;
+
+    let channel: any;
+
+    const loadStats = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // 1) Fetch stats from student_profiles
+        const { data, error } = await supabase
+          .from('student_profiles')
+          .select('*')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (error) {
+          setError(error.message);
+          setLoading(false);
+          return;
+        }
+
+        // 2) If no row yet, create a REAL row (NOT mock)
+        if (!data) {
+          const { data: inserted, error: insertErr } = await supabase
+            .from('student_profiles')
+            .insert({ 
+              id: user.id,
+              aura_points: 0,
+              xp: 0,
+              current_level: 1,
+              streak: 0,
+              gold: 0
+            })
+            .select('*')
+            .single();
+
+          if (insertErr) {
+            setError(insertErr.message);
+            setLoading(false);
+            return;
+          }
+
+          setStats({
+            auraPoints: inserted.aura_points || 0,
+            totalXP: inserted.xp || 0,
+            level: inserted.current_level || 1,
+            currentStreak: inserted.streak || 0,
+            gold: inserted.gold || 0,
+            totalLessons: 0,
+            enrolledCourses: 0,
+            completedCourses: 0
+          });
+        } else {
+          setStats({
+            auraPoints: data.aura_points || 0,
+            totalXP: data.xp || 0,
+            level: data.current_level || 1,
+            currentStreak: data.streak || 0,
+            gold: data.gold || 0,
+            totalLessons: 0,
+            enrolledCourses: 0,
+            completedCourses: 0
+          });
+        }
+
+        setLoading(false);
+
+        // 3) Subscribe to realtime updates
+        channel = supabase
+          .channel(`student_profile:${user.id}`)
+          .on(
+            'postgres_changes',
+            { 
+              event: '*', 
+              schema: 'public', 
+              table: 'student_profiles', 
+              filter: `id=eq.${user.id}` 
+            },
+            (payload: any) => {
+              if (payload.new) {
+                setStats({
+                  auraPoints: payload.new.aura_points || 0,
+                  totalXP: payload.new.xp || 0,
+                  level: payload.new.current_level || 1,
+                  currentStreak: payload.new.streak || 0,
+                  gold: payload.new.gold || 0,
+                  totalLessons: 0,
+                  enrolledCourses: 0,
+                  completedCourses: 0
+                });
+              }
+            }
+          )
+          .subscribe();
+      } catch (err: any) {
+        console.error('Error loading stats:', err);
+        setError(err.message);
+        setLoading(false);
+      }
+    };
+
+    loadStats();
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   // Load dashboard data with real-time subscription
   useEffect(() => {
@@ -1427,14 +1541,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
               onClick={() => handleStatCardClick('xp')}
               className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm border-2 border-orange-300 hover:shadow-lg hover:border-orange-400 transition-all cursor-pointer text-left relative"
             >
-              {/* ✅ UPDATED: Show polling status instead of WebSocket status */}
-              {pollingStatus === 'active' && (
-                <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              )}
               <div className="flex items-center justify-between mb-3 sm:mb-4">
                 <Flame className="w-6 h-6 sm:w-8 sm:h-8 text-orange-600" />
                 <span className="text-2xl sm:text-3xl font-bold text-gray-900">
-                  {stats?.auraPoints || 0}
+                  {loading ? '...' : (stats?.auraPoints ?? 0)}
                 </span>
               </div>
               <p className="text-gray-700 font-medium text-sm sm:text-base">Aura Points</p>
@@ -1447,7 +1557,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
               <div className="flex items-center justify-between mb-3 sm:mb-4">
                 <Trophy className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-600" />
                 <span className="text-2xl sm:text-3xl font-bold text-gray-900">
-                  {stats?.level || 1}
+                  {loading ? '...' : (stats?.level ?? 1)}
                 </span>
               </div>
               <p className="text-gray-700 font-medium text-sm sm:text-base">Level</p>
@@ -1459,7 +1569,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
               <div className="flex items-center justify-between mb-3 sm:mb-4">
                 <Zap className="w-6 h-6 sm:w-8 sm:h-8 text-purple-600" />
                 <span className="text-2xl sm:text-3xl font-bold text-gray-900">
-                  {stats?.currentStreak || 0} days
+                  {loading ? '...' : (stats?.currentStreak ?? 0)} days
                 </span>
               </div>
               <p className="text-gray-700 font-medium text-sm sm:text-base">Streak</p>
@@ -1472,7 +1582,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
               <div className="flex items-center justify-between mb-3 sm:mb-4">
                 <BookOpen className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
                 <span className="text-2xl sm:text-3xl font-bold text-gray-900">
-                  {stats?.totalXP || 0}
+                  {loading ? '...' : (stats?.totalXP ?? 0)}
                 </span>
               </div>
               <p className="text-gray-700 font-medium text-sm sm:text-base">XP</p>

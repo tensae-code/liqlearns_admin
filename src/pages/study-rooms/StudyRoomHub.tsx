@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Video, VideoOff, Mic, MicOff, MessageSquare, Users, Monitor, LogOut, Camera, User, Heart, Gift, Pin, Award } from 'lucide-react';
+import { Video, VideoOff, Mic, MicOff, MessageSquare, Users, Monitor, LogOut, Camera, User, Heart, Gift, Pin, Award, AlertCircle, X, Loader2 } from 'lucide-react';
+import { studyRoomService } from '../../services/studyRoomService';
+import { supabase } from '../../services/supabaseClient';
 
 // Add missing interface
 interface StudyRoomHubProps {
@@ -51,6 +53,8 @@ const StudyRoomHub: React.FC<StudyRoomHubProps> = ({ userId: propUserId }) => {
   const [pinnedParticipants, setPinnedParticipants] = useState<Set<string>>(new Set());
   const [user, setUser] = useState<{ id: string } | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
 
   // Add missing functions
   const loadAvailableRooms = async () => {
@@ -67,14 +71,80 @@ const StudyRoomHub: React.FC<StudyRoomHubProps> = ({ userId: propUserId }) => {
     }
   };
 
-  const handleJoinRoom = async (roomId: string) => {
+  const checkRealtimeConnection = async () => {
     try {
-      const room = availableRooms.find(r => r.id === roomId);
-      if (room) {
-        setCurrentRoom(room);
+      setConnectionStatus('connecting');
+      
+      // Test realtime connection
+      const channel = supabase
+        .channel('connection_test')
+        .on('presence', { event: 'sync' }, () => {
+          console.log('Realtime connected');
+          setConnectionStatus('connected');
+        })
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            setConnectionStatus('connected');
+          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+            setConnectionStatus('disconnected');
+          }
+        });
+
+      // Cleanup after 5 seconds
+      setTimeout(() => {
+        supabase.removeChannel(channel);
+      }, 5000);
+    } catch (error) {
+      console.error('Realtime connection check failed:', error);
+      setConnectionStatus('disconnected');
+    }
+  };
+
+  const loadRooms = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const rooms = await studyRoomService.getRooms();
+      setAvailableRooms(rooms);
+    } catch (err: any) {
+      console.error('Error loading rooms:', err);
+      setError(err.message || 'Failed to load study rooms');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleJoinRoom = async (roomId: string) => {
+    if (!user?.id) {
+      setError('You must be logged in to join a room');
+      return;
+    }
+
+    try {
+      setError(null);
+      setRetryAttempt(0);
+
+      await studyRoomService.joinRoom(roomId, user.id);
+      
+      // Refresh rooms to show updated participant count
+      await loadRooms();
+      
+      // Show success message
+      alert('Successfully joined the room!');
+    } catch (err: any) {
+      console.error('Error joining room:', err);
+      setError(err.message || 'Failed to join room');
+      
+      // Offer retry option
+      if (retryAttempt < 2) {
+        const retry = window.confirm(
+          `${err.message}\n\nWould you like to retry joining this room?`
+        );
+        if (retry) {
+          setRetryAttempt(prev => prev + 1);
+          setTimeout(() => handleJoinRoom(roomId), 1000);
+        }
       }
-    } catch (err) {
-      console.error('Failed to join room', err);
     }
   };
 
@@ -126,26 +196,50 @@ const StudyRoomHub: React.FC<StudyRoomHubProps> = ({ userId: propUserId }) => {
   };
 
   useEffect(() => {
-    loadAvailableRooms();
+    loadRooms();
+    checkRealtimeConnection();
     setUser({ id: propUserId });
   }, [propUserId]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-orange-50 to-white">
+      {/* Connection Status Indicator */}
+      {connectionStatus !== 'connected' && (
+        <div className={`fixed top-0 left-0 right-0 z-50 p-2 text-center text-sm ${
+          connectionStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
+        } text-white`}>
+          {connectionStatus === 'connecting' ? 'Connecting to realtime...' : 'Realtime connection lost. Retrying...'}
+          <button 
+            onClick={checkRealtimeConnection}
+            className="ml-4 underline hover:no-underline"
+          >
+            Retry Connection
+          </button>
+        </div>
+      )}
+
+      {/* Error Banner */}
+      {error && (
+        <div className="fixed top-16 left-0 right-0 z-40 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mx-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <AlertCircle className="w-5 h-5 mr-2" />
+              <p className="font-medium">{error}</p>
+            </div>
+            <button 
+              onClick={() => setError(null)}
+              className="text-red-500 hover:text-red-700"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center min-h-screen">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
           <p className="ml-4 text-gray-700">Loading study rooms...</p>
-        </div>
-      ) : error ? (
-        <div className="flex flex-col items-center justify-center min-h-screen">
-          <p className="text-red-600 mb-4">{error}</p>
-          <button
-            onClick={loadAvailableRooms}
-            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
-          >
-            Retry
-          </button>
         </div>
       ) : !currentRoom ? (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -173,11 +267,11 @@ const StudyRoomHub: React.FC<StudyRoomHubProps> = ({ userId: propUserId }) => {
               <p className="text-gray-600 text-lg">No active study rooms available</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {availableRooms.map((room) => (
                 <div
                   key={room.id}
-                  className="bg-white rounded-xl shadow-md hover:shadow-xl transition-shadow p-6 border border-gray-200"
+                  className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
                 >
                   <div className="flex justify-between items-start mb-4">
                     <h3 className="text-xl font-semibold text-gray-900">{room.room_name}</h3>
@@ -201,17 +295,24 @@ const StudyRoomHub: React.FC<StudyRoomHubProps> = ({ userId: propUserId }) => {
                   </div>
                   <button
                     onClick={() => handleJoinRoom(room.id)}
-                    disabled={
-                      room.current_participants >= room.max_participants ||
-                      room.status === 'ended'
-                    }
-                    className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
-                      room.current_participants >= room.max_participants || room.status === 'ended' ?'bg-gray-300 text-gray-500 cursor-not-allowed' :'bg-orange-500 text-white hover:bg-orange-600'
+                    disabled={retryAttempt >= 2 || room.current_participants >= room.max_participants}
+                    className={`w-full mt-4 px-4 py-2 rounded-md transition-colors ${
+                      retryAttempt >= 2
+                        ? 'bg-gray-300 cursor-not-allowed'
+                        : room.current_participants >= room.max_participants
+                        ? 'bg-gray-300 cursor-not-allowed' :'bg-blue-600 hover:bg-blue-700 text-white'
                     }`}
                   >
-                    {room.current_participants >= room.max_participants
-                      ? 'Room Full'
-                      : room.status === 'ended' ?'Ended' :'Join Room'}
+                    {retryAttempt >= 2 ? (
+                      <span className="flex items-center justify-center">
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Joining...
+                      </span>
+                    ) : room.current_participants >= room.max_participants ? (
+                      'Room Full'
+                    ) : (
+                      'Join Room'
+                    )}
                   </button>
                 </div>
               ))}

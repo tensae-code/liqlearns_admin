@@ -9,9 +9,6 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 
 import GeneralQuestionsStep from './components/GeneralQuestionsStep';
-import SubscriptionStep from './components/SubscriptionStep';
-import PaymentStep from './components/PaymentStep';
-import InvoiceRequestStep from './components/InvoiceRequestStep';
 
 import PasswordStrengthIndicator from '../../components/ui/PasswordStrengthIndicator';
 import PhoneInput from '../../components/ui/PhoneInput';
@@ -151,7 +148,6 @@ const SignupForm = () => {
     country: 'ET',
     state: '',
     city: '',
-    subscriptionPlan: 'free',
     policiesAccepted: '',
     sponsorName: '',
     applicationData: null as any,
@@ -174,8 +170,6 @@ const SignupForm = () => {
   const [sponsorError, setSponsorError] = useState('');
   const [sponsorValidationStatus, setSponsorValidationStatus] = useState<'checking' | 'valid' | 'invalid' | null>(null);
   const [sponsorCheckTimeout, setSponsorCheckTimeout] = useState<NodeJS.Timeout | null>(null);
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('yearly');
-  const [showInvoiceRequest, setShowInvoiceRequest] = useState(false);
 
   // Instagram-like username validation
   const validateUsername = (username: string): { isValid: boolean; error: string } => {
@@ -520,13 +514,11 @@ const SignupForm = () => {
         return;
       }
 
-      // NEW: Validate sponsor username is required
       if (!formData.sponsorName) {
         setError('Sponsor username is required');
         return;
       }
 
-      // NEW: Check sponsor username validation status
       if (sponsorValidationStatus === 'checking') {
         setError('Please wait while we validate the sponsor username');
         return;
@@ -557,55 +549,25 @@ const SignupForm = () => {
     
     setError('');
     
-    // Updated step navigation - account for payment step
+    // UPDATED: Skip subscription step - go directly from verification to policy
     if (step === 4 && formData.role === 'student') {
-      setStep(6); // Jump to subscription for students
-    } else if (step === 6) {
-      // After subscription, go to payment
-      setStep(7);
-    } else if (step === 7) {
-      // After payment/invoice, go to policy
-      setStep(8);
+      setStep(6); // Jump to policy agreement for students (skip application and subscription)
+    } else if (step === 5 && formData.role !== 'student') {
+      setStep(6); // After employee application, jump to policy agreement (skip subscription)
     } else {
       setStep(step + 1);
     }
   };
 
   const handlePrevious = () => {
-    // Updated navigation for new steps
+    // UPDATED: Skip subscription step when going back
     if (step === 6 && formData.role === 'student') {
-      setStep(4); // Skip application form for students going back
-    } else if (step === 7) {
-      setStep(6); // Back to subscription from payment
-    } else if (step === 8) {
-      setStep(7); // Back to payment from policy
+      setStep(4); // Back to verification (skip application and subscription)
+    } else if (step === 6 && formData.role !== 'student') {
+      setStep(5); // Back to application form (skip subscription)
     } else {
       setStep(step - 1);
     }
-  };
-
-  const handlePaymentSuccess = async () => {
-    // Payment successful - move to policy agreement
-    setStep(8);
-  };
-
-  const handlePaymentFailure = (error: string) => {
-    setError(error);
-    // Stay on payment step for retry
-  };
-
-  const handleRequestInvoice = () => {
-    setShowInvoiceRequest(true);
-  };
-
-  const handleInvoiceSent = () => {
-    // Invoice sent - move to policy agreement
-    setShowInvoiceRequest(false);
-    setStep(8);
-  };
-
-  const handleBackToPayment = () => {
-    setShowInvoiceRequest(false);
   };
 
   const handleSubmit = async () => {
@@ -617,12 +579,9 @@ const SignupForm = () => {
     try {
       setLoading(true);
       
-      // FIXED: Phone number from react-international-phone is already properly formatted with country code
-      // Do NOT add dial code again - this was causing duplication like +251+14255423737
-      // Use formData.phone directly as it already contains the full international format
       const fullPhoneNumber = formData.phone;
       
-      // Prepare metadata for signup - INCLUDE sponsor_name
+      // UPDATED: Remove subscription_plan from metadata
       const metadata = {
         full_name: formData.fullName,
         username: formData.username,
@@ -633,16 +592,13 @@ const SignupForm = () => {
         country: formData.country,
         state: formData.state,
         city: formData.city,
-        subscription_plan: formData.subscriptionPlan,
-        sponsor_name: formData.sponsorName // NEW: Include sponsor name in metadata
+        sponsor_name: formData.sponsorName
       };
 
-      // Sign up the user
       const { error: signupError, data } = await signUp(formData.email, formData.password, { data: metadata });
       
       if (signupError) throw signupError;
 
-      // If non-student role, submit employee application
       if (formData.role !== 'student' && formData.applicationData) {
         const { error: appError } = await supabase
           .from('role_approval_requests')
@@ -656,27 +612,7 @@ const SignupForm = () => {
         if (appError) throw appError;
       }
 
-      // IMPORTANT: Account activation logic
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      // Check if user has active subscription or pending invoice
-      const { data: studentProfile } = await supabase
-        .from('student_profiles')
-        .select('has_active_subscription, stripe_subscription_id')
-        .eq('id', user.id)
-        .single();
-
-      // For students with active subscription, allow immediate access
-      if (studentProfile?.has_active_subscription) {
-        // Update account status to active
-        await supabase
-          .from('user_profiles')
-          .update({ account_status: 'active' })
-          .eq('id', user.id);
-      }
-
-      setStep(9); // Show final confirmation at step 9
+      setStep(7);
     } catch (error: any) {
       console.error('Signup error:', error);
       setError(error.message || 'Failed to create account. Please try again.');
@@ -685,13 +621,13 @@ const SignupForm = () => {
     }
   };
 
-  // UPDATED: Total steps calculation
-  const totalSteps = formData.role === 'student' ? 9 : 10;
+  // UPDATED: Total steps - removed subscription step (was 8, now 7 for students; was 9, now 8 for non-students)
+  const totalSteps = formData.role === 'student' ? 7 : 8;
   const currentDisplayStep = step;
 
   return (
     <div className="space-y-6">
-      {/* REDESIGNED: Two-Line Progress Indicator with Better Spacing */}
+      {/* UPDATED: Progress indicator with new total steps */}
       <div className="mb-8">
         {/* First Row: Steps 1-4 */}
         <div className="flex items-center justify-between gap-2 mb-4">
@@ -730,7 +666,7 @@ const SignupForm = () => {
           })}
         </div>
 
-        {/* Second Row: Steps 5-8 (if applicable) */}
+        {/* Second Row: Steps 5-7/8 (if applicable) */}
         {totalSteps > 4 && (
           <div className="flex items-center justify-between gap-2">
             {Array.from({ length: totalSteps - 4 }).map((_, index) => {
@@ -1144,46 +1080,12 @@ const SignupForm = () => {
         />
       )}
 
-      {/* Step 6: Subscription */}
+      {/* Step 6: Policy Agreement - UPDATED step number */}
       {step === 6 && (
-        <div className="space-y-6">
-          <SubscriptionStep
-            selectedPlan={formData.subscriptionPlan}
-            onPlanSelect={(plan) => handleInputChange('subscriptionPlan', plan)}
-          />
-        </div>
-      )}
-
-      {/* Step 7: Payment or Invoice Request */}
-      {step === 7 && (
-        <>
-          {!showInvoiceRequest ? (
-            <PaymentStep
-              selectedPlan={formData.subscriptionPlan}
-              billingCycle={billingCycle}
-              userEmail={formData.email}
-              onPaymentSuccess={handlePaymentSuccess}
-              onPaymentFailure={handlePaymentFailure}
-              onRequestInvoice={handleRequestInvoice}
-            />
-          ) : (
-            <InvoiceRequestStep
-              userEmail={formData.email}
-              selectedPlan={formData.subscriptionPlan}
-              billingCycle={billingCycle}
-              onInvoiceSent={handleInvoiceSent}
-              onBackToPayment={handleBackToPayment}
-            />
-          )}
-        </>
-      )}
-
-      {/* Step 8: Policy Agreement */}
-      {step === 8 && (
         <div className="space-y-6">
           <div className="text-center mb-6">
             <h3 className="text-2xl font-bold text-gray-900 mb-2">Terms and Policies</h3>
-            <p className="text-gray-600">Review and accept our terms to continue</p>
+            <p className="text-gray-600">Review and accept our terms to create your account</p>
           </div>
           
           <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6">
@@ -1204,8 +1106,8 @@ const SignupForm = () => {
         </div>
       )}
 
-      {/* Step 9: Final Confirmation */}
-      {step === 9 && (
+      {/* Step 7: Final Confirmation - UPDATED step number */}
+      {step === 7 && (
         <div className="space-y-6">
           <div className="text-center mb-6">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1213,8 +1115,7 @@ const SignupForm = () => {
             </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">Account Created Successfully!</h3>
             <p className="text-gray-600">
-              {formData.role === 'student' && formData.subscriptionPlan !== 'free' 
-                ? 'Your payment was processed. You can now access your dashboard.' :'Complete payment to activate your subscription.'}
+              Welcome to LiqLearns! You can now sign in to access your dashboard.
             </p>
           </div>
           
@@ -1241,37 +1142,19 @@ const SignupForm = () => {
 
           <Button
             type="button"
-            onClick={async () => {
-              // For students with active subscription, go to dashboard
-              // Otherwise, redirect to login
-              const { data: { user } } = await supabase.auth.getUser();
-              if (user) {
-                const { data: studentProfile } = await supabase
-                  .from('student_profiles')
-                  .select('has_active_subscription')
-                  .eq('id', user.id)
-                  .single();
-
-                if (studentProfile?.has_active_subscription) {
-                  window.location.href = '/role-based-dashboard-hub';
-                } else {
-                  window.location.href = '/login';
-                }
-              } else {
-                window.location.href = '/login';
-              }
+            onClick={() => {
+              window.location.href = '/login';
             }}
             variant="default"
             fullWidth
           >
-            {formData.role === 'student' && formData.subscriptionPlan !== 'free'
-              ? 'Go to Dashboard' : 'Continue to Sign In'}
+            Continue to Sign In
           </Button>
         </div>
       )}
 
-      {/* Navigation Buttons */}
-      {step < 9 && step !== 5 && !showInvoiceRequest && (
+      {/* Navigation Buttons - UPDATED step numbers */}
+      {step < 7 && step !== 5 && (
         <div className="flex justify-between items-center pt-6 border-t border-gray-200">
           <Button
             type="button"
@@ -1282,7 +1165,7 @@ const SignupForm = () => {
             ← Previous
           </Button>
 
-          {step < 8 ? (
+          {step < 6 ? (
             <Button
               type="button"
               onClick={handleNext}
@@ -1291,7 +1174,7 @@ const SignupForm = () => {
             >
               Next →
             </Button>
-          ) : step === 8 ? (
+          ) : step === 6 ? (
             <Button
               type="button"
               onClick={handleSubmit}

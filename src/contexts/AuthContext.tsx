@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { createStripeCustomer } from '../services/stripeService';
+// STRIPE INTEGRATION REMOVED: Commented out Stripe customer creation import
+// import { createStripeCustomer } from '../services/stripeService';
 
 interface UserProfile {
   id: string;
@@ -180,17 +181,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) throw error;
 
-      // CRITICAL FIX: Create Stripe customer immediately after successful signup
-      if (data?.user) {
-        try {
-          const fullName = options?.data?.full_name || '';
-          await createStripeCustomer(data.user.id, email, fullName);
-          console.log('✅ Stripe customer created for user:', data.user.id);
-        } catch (stripeError) {
-          console.error('❌ Failed to create Stripe customer:', stripeError);
-          // Don't throw - account creation was successful, Stripe customer can be created later
-        }
-      }
+      // STRIPE INTEGRATION REMOVED: Stripe customer creation code removed
+      // User profiles are now created automatically by database triggers
+      // No manual profile creation needed to avoid trigger conflicts
 
       return { data, error: null };
     } catch (error: any) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Users, FileText, Award, Package, Upload, Edit3, Plus, Check, Share2, Calendar, BarChart3, Clock, Target, TrendingUp, UserCheck, BookMarked, Video, MessageCircle } from 'lucide-react';
+import { BookOpen, Users, FileText, Award, Package, Upload, Edit3, Plus, Check, Share2, Calendar, BarChart3, Clock, Target, TrendingUp, UserCheck, BookMarked, Video, MessageCircle, Download } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 
 interface TeacherDashboardProps {
@@ -21,6 +21,14 @@ export default function TeacherDashboard({ activeSection = 'dashboard' }: Teache
       expiryDays: 0
     }
   });
+
+  // Add this block - Define students array
+  const students = [
+    { name: 'John Doe', courses: 3, progress: 78, status: 'Active' },
+    { name: 'Jane Smith', courses: 2, progress: 92, status: 'Active' },
+    { name: 'Mike Johnson', courses: 4, progress: 65, status: 'Active' },
+    { name: 'Sarah Wilson', courses: 2, progress: 45, status: 'Active' }
+  ];
 
   // NEW: Classes section
   const renderClassesSection = () => {
@@ -820,6 +828,55 @@ export default function TeacherDashboard({ activeSection = 'dashboard' }: Teache
     );
   };
 
+  const [showCreateClassModal, setShowCreateClassModal] = useState(false);
+  const [showManageClassModal, setShowManageClassModal] = useState(false);
+  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+  const [showUploadContentModal, setShowUploadContentModal] = useState(false);
+
+  const handleManageClass = () => {
+    setShowManageClassModal(true);
+  };
+
+  const handleCreateClass = () => {
+    setShowCreateClassModal(true);
+  };
+
+  const handleAddStudent = () => {
+    setShowAddStudentModal(true);
+  };
+
+  const handleUploadContent = () => {
+    setShowUploadContentModal(true);
+  };
+
+  const handleExportReport = async () => {
+    try {
+      // Generate CSV report
+      const csvContent = [
+        ['Student Name', 'Courses', 'Progress', 'Status'],
+        ...students.map(s => [
+          s.name,
+          s.courses.toString(),
+          `${s.progress}%`,
+          s.status
+        ])
+      ].map(row => row.join(',')).join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `student-report-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+
+      alert('Report exported successfully!');
+    } catch (error) {
+      console.error('Error exporting report:', error);
+      alert('Failed to export report');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-orange-50 to-white">
       {/* Welcome header */}
@@ -839,6 +896,190 @@ export default function TeacherDashboard({ activeSection = 'dashboard' }: Teache
       {activeSection === 'schedule' && renderScheduleSection()}
       {activeSection === 'store' && renderStoreSection()}
       {activeSection === 'help' && renderHelpSection()}
+
+      {/* Action Buttons */}
+      <div className="grid md:grid-cols-3 gap-4">
+        <button
+          onClick={handleManageClass}
+          className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Manage Class
+        </button>
+        <button
+          onClick={handleCreateClass}
+          className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors"
+        >
+          Create Class
+        </button>
+        <button
+          onClick={handleAddStudent}
+          className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors"
+        >
+          Add Student
+        </button>
+      </div>
+
+      {/* Upload Content Button */}
+      <button
+        onClick={handleUploadContent}
+        className="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
+      >
+        Upload Content
+      </button>
+
+      {/* Export Report Button */}
+      <button
+        onClick={handleExportReport}
+        className="w-full bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center"
+      >
+        <Download className="w-5 h-5 mr-2" />
+        Export Report
+      </button>
+
+      {/* Create Class Modal */}
+      {showCreateClassModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4">Create New Class</h3>
+            <div className="space-y-4">
+              <input
+                type="text"
+                placeholder="Class Name"
+                className="w-full px-4 py-2 border rounded-lg"
+              />
+              <input
+                type="text"
+                placeholder="Subject"
+                className="w-full px-4 py-2 border rounded-lg"
+              />
+              <textarea
+                placeholder="Description"
+                className="w-full px-4 py-2 border rounded-lg"
+                rows={3}
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    alert('Class created successfully!');
+                    setShowCreateClassModal(false);
+                  }}
+                  className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                >
+                  Create
+                </button>
+                <button
+                  onClick={() => setShowCreateClassModal(false)}
+                  className="flex-1 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Class Modal */}
+      {showManageClassModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <h3 className="text-xl font-bold mb-4">Manage Classes</h3>
+            <div className="space-y-4">
+              {/* List of classes with edit/delete options */}
+              <div className="border rounded-lg p-4">
+                <p className="font-medium">No classes yet</p>
+                <p className="text-gray-600 text-sm">Create your first class to get started</p>
+              </div>
+              <button
+                onClick={() => setShowManageClassModal(false)}
+                className="w-full bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Student Modal */}
+      {showAddStudentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4">Add Student</h3>
+            <div className="space-y-4">
+              <input
+                type="email"
+                placeholder="Student Email"
+                className="w-full px-4 py-2 border rounded-lg"
+              />
+              <select className="w-full px-4 py-2 border rounded-lg">
+                <option>Select Class</option>
+                <option>Class 1</option>
+                <option>Class 2</option>
+              </select>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    alert('Student added successfully!');
+                    setShowAddStudentModal(false);
+                  }}
+                  className="flex-1 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+                >
+                  Add
+                </button>
+                <button
+                  onClick={() => setShowAddStudentModal(false)}
+                  className="flex-1 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Content Modal */}
+      {showUploadContentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4">Upload Content</h3>
+            <div className="space-y-4">
+              <input
+                type="text"
+                placeholder="Content Title"
+                className="w-full px-4 py-2 border rounded-lg"
+              />
+              <input
+                type="file"
+                className="w-full px-4 py-2 border rounded-lg"
+              />
+              <select className="w-full px-4 py-2 border rounded-lg">
+                <option>Select Course</option>
+                <option>Course 1</option>
+                <option>Course 2</option>
+              </select>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    alert('Content uploaded successfully!');
+                    setShowUploadContentModal(false);
+                  }}
+                  className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
+                >
+                  Upload
+                </button>
+                <button
+                  onClick={() => setShowUploadContentModal(false)}
+                  className="flex-1 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
