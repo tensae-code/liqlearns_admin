@@ -110,12 +110,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
   useEffect(() => {
     if (!currentRoom) return;
 
-    const subscription = studyRoomService.subscribeToRoom(
-      currentRoom.id,
-      () => loadRoomParticipants(currentRoom.id)
-    );
+    const unsubscribe = studyRoomService.subscribeToRoom(currentRoom.id, {
+      onParticipantChange: setRoomParticipants,
+      onMessage: () => {},
+      onInteraction: () => {},
+    });
 
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, [currentRoom]);
 
   const checkStreakAnimation = () => {
@@ -281,6 +282,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
     if (!user?.id || !newRoomName.trim()) return;
 
     try {
+      setRoomError(null);
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('date_of_birth')
@@ -288,7 +290,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
         .single();
 
       if (!profile?.date_of_birth) {
-        alert('Please set your date of birth in settings first.');
+        setRoomError('Please set your date of birth in settings first.');
         return;
       }
 
@@ -296,10 +298,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
       setNewRoomName('');
       setShowCreateRoom(false);
       await loadAvailableRooms();
-      alert('Study room created successfully!');
     } catch (error) {
       console.error('Error creating room:', error);
-      alert('Failed to create room. Please try again.');
+      setRoomError('Failed to create room. Please try again.');
     }
   };
 
@@ -307,6 +308,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
     if (!user?.id) return;
 
     try {
+      setRoomError(null);
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('full_name, avatar_url')
@@ -315,13 +317,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
 
       const currentCourse = selectedCourse?.name || null;
 
-      const participant = await studyRoomService.joinStudyRoom(
-        room.id,
-        user.id,
-        profile?.full_name || user.email || 'Student',
-        profile?.avatar_url || null,
-        currentCourse
-      );
+      const participant = await studyRoomService.joinRoom(room.id, {
+        display_name: profile?.full_name || user.email || 'Student',
+        avatar_url: profile?.avatar_url || null,
+        current_course: currentCourse,
+      });
 
       setCurrentRoom(room);
       setCurrentParticipantId(participant.id);
@@ -329,33 +329,33 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
     } catch (error: any) {
       console.error('Error joining room:', error);
       if (error.message?.includes('duplicate')) {
-        alert('You are already in this room!');
+        setRoomError('You are already in this room!');
       } else {
-        alert('Failed to join room. Please try again.');
+        setRoomError('Failed to join room. Please try again.');
       }
     }
   };
 
   const handleLeaveRoom = async () => {
-    if (!currentParticipantId) return;
+    if (!currentRoom) return;
 
     try {
-      await studyRoomService.leaveStudyRoom(currentParticipantId);
+      await studyRoomService.leaveRoom(currentRoom.id);
       setCurrentRoom(null);
       setCurrentParticipantId(null);
       setRoomParticipants([]);
       await loadAvailableRooms();
     } catch (error) {
       console.error('Error leaving room:', error);
-      alert('Failed to leave room. Please try again.');
+      setRoomError('Failed to leave room. Please try again.');
     }
   };
 
   const handleMediaToggle = async (cameraEnabled: boolean, micEnabled: boolean) => {
-    if (!currentParticipantId) return;
+    if (!currentRoom) return;
 
     try {
-      await studyRoomService.updateMediaSettings(currentParticipantId, cameraEnabled, micEnabled);
+      await studyRoomService.updateMediaStatus(currentRoom.id, cameraEnabled, micEnabled);
     } catch (error) {
       console.error('Error updating media settings:', error);
     }

@@ -22,13 +22,23 @@ import {
   CourseContentItem 
 } from '../../../services/courseContentService';
 import { CourseOption } from './CourseSelectionCard';
-
+import { supabase } from '../../../lib/supabase';
 interface CourseContentViewProps {
   course: CourseOption;
   onClose: () => void;
   realCourseId?: string;
 }
-
+interface CourseDetails {
+  id: string;
+  title: string;
+  description: string | null;
+  courseType: string | null;
+  lessonType: string | null;
+  difficultyLevel: string | null;
+  language: string | null;
+  estimatedDurationMinutes: number | null;
+  xpReward: number | null;
+}
 // Session data structure for course schedule
 interface CourseSession {
   id: string;
@@ -60,6 +70,8 @@ const CourseContentView: React.FC<CourseContentViewProps> = ({
   const [titles, setTitles] = useState<(CourseTitle & { contentItems?: CourseContentItem[]; expanded?: boolean })[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+    const [courseDetails, setCourseDetails] = useState<CourseDetails | null>(null);
+  const [courseDetailsError, setCourseDetailsError] = useState<string | null>(null);
   const [activeSessionTab, setActiveSessionTab] = useState<'upcoming' | 'live' | 'past'>('upcoming');
 
   // FIX: Add proper session data with filtering logic
@@ -122,13 +134,77 @@ const CourseContentView: React.FC<CourseContentViewProps> = ({
   ]);
 
   useEffect(() => {
-    if (realCourseId) {
-      loadCourseHierarchy();
+    const courseLookupId = realCourseId || course.id;
+
+    if (courseLookupId) {
+      loadCourseHierarchy(courseLookupId);
     } else {
       setLoading(false);
       setError('Course not found in database');
     }
-  }, [realCourseId]);
+  }, [course.id, realCourseId]);
+
+  useEffect(() => {
+    const courseLookupId = realCourseId || course.id;
+
+    if (!courseLookupId) {
+      setCourseDetails(null);
+      setCourseDetailsError('We could not locate this course. Please select another course to continue.');
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadCourseDetails = async () => {
+      try {
+        setCourseDetailsError(null);
+        const { data, error: detailsError } = await supabase
+          .from('courses')
+          .select('id, title, description, course_type, lesson_type, difficulty_level, language, estimated_duration_minutes, xp_reward')
+          .eq('id', courseLookupId)
+          .maybeSingle();
+
+        if (detailsError) throw detailsError;
+
+        if (!data) {
+          if (isMounted) {
+            setCourseDetails(null);
+            setCourseDetailsError(
+              'We could not find this course in the database. It may have been removed or renamed. Please pick another course or contact support.'
+            );
+          }
+          return;
+        }
+
+        if (isMounted) {
+          setCourseDetails({
+            id: data.id,
+            title: data.title,
+            description: data.description ?? null,
+            courseType: data.course_type ?? null,
+            lessonType: data.lesson_type ?? null,
+            difficultyLevel: data.difficulty_level ?? null,
+            language: data.language ?? null,
+            estimatedDurationMinutes: data.estimated_duration_minutes ?? null,
+            xpReward: data.xp_reward ?? null
+          });
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          setCourseDetails(null);
+          setCourseDetailsError(
+            err?.message || 'Unable to load course details. Please try again or select a different course.'
+          );
+        }
+      }
+    };
+
+    loadCourseDetails();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [course.id, realCourseId]);
 
   // Click outside to close functionality
   useEffect(() => {
@@ -148,8 +224,8 @@ const CourseContentView: React.FC<CourseContentViewProps> = ({
     };
   }, [onClose]);
 
-  const loadCourseHierarchy = async () => {
-    if (!realCourseId) {
+  const loadCourseHierarchy = async (courseLookupId: string) => {
+    if (!courseLookupId) {
       setError('Course not available');
       setLoading(false);
       return;
@@ -163,7 +239,7 @@ const CourseContentView: React.FC<CourseContentViewProps> = ({
         throw new Error('Course content service is not available');
       }
       
-      const data = await courseContentService.getCourseWithHierarchy(realCourseId);
+      const data = await courseContentService.getCourseWithHierarchy(courseLookupId);
       setTitles(data.map((t: any) => ({ ...t, expanded: false })));
     } catch (err: any) {
       console.error('Error loading course hierarchy:', err);
@@ -224,7 +300,7 @@ const CourseContentView: React.FC<CourseContentViewProps> = ({
       {/* Header with Close Button */}
       <div className="flex-shrink-0 bg-gradient-to-r from-orange-500 to-orange-600 p-6 text-white">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-2xl font-bold">{course.name}</h2>
+          <h2 className="text-2xl font-bold">{courseDetails?.title || course.name}</h2>
           <button
             onClick={onClose}
             className="p-2 hover:bg-white/20 rounded-lg transition-colors"
@@ -233,11 +309,60 @@ const CourseContentView: React.FC<CourseContentViewProps> = ({
             <X className="w-6 h-6" />
           </button>
         </div>
-        <p className="text-orange-100 text-sm">{course.description}</p>
+         <p className="text-orange-100 text-sm">
+          {courseDetails?.description || course.description || 'No course description available yet.'}
+        </p>
       </div>
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto">
+        {courseDetailsError && (
+          <div className="px-6 pt-6">
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {courseDetailsError}
+            </div>
+          </div>
+        )}
+
+        <div className="px-6 pt-6">
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <h3 className="text-base font-bold text-gray-900 mb-3">Course Overview</h3>
+            <div className="grid grid-cols-1 gap-3 text-sm text-gray-700">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-gray-900">Course Type</span>
+                <span className="capitalize">{courseDetails?.courseType || course.type || 'Not set'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-gray-900">Lesson Type</span>
+                <span className="capitalize">{courseDetails?.lessonType || course.lessonType || 'Not set'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-gray-900">Difficulty</span>
+                <span className="capitalize">
+                  {courseDetails?.difficultyLevel || course.difficulty || 'Not set'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-gray-900">Language</span>
+                <span>{courseDetails?.language || course.language || 'Not set'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-gray-900">Estimated Duration</span>
+                <span>
+                  {courseDetails?.estimatedDurationMinutes
+                    ? `${courseDetails.estimatedDurationMinutes} min`
+                    : course.estimatedDurationMinutes
+                      ? `${course.estimatedDurationMinutes} min`
+                      : course.estimatedTime || 'Not set'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-gray-900">XP Reward</span>
+                <span>{courseDetails?.xpReward ?? course.xpReward ?? 'Not set'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
         {/* FIX: NEW Session Tabs Section - Coursera style */}
         <div className="border-b border-gray-200 bg-white sticky top-0 z-10">
           <div className="px-6 py-4">

@@ -12,6 +12,10 @@ export interface CourseOption {
   skillCount?: number;
   difficulty?: 'beginner' | 'intermediate' | 'advanced';
   estimatedTime?: string;
+  estimatedDurationMinutes?: number | null;
+  lessonType?: string | null;
+  language?: string | null;
+  xpReward?: number | null;
   description?: string; // REMOVED: No longer display description text as per user requirements
 }
 

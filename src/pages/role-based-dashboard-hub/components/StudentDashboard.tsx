@@ -544,6 +544,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
             color: style.color,
             difficulty,
             estimatedTime: formatEstimatedTime(course.estimatedDurationMinutes),
+            estimatedDurationMinutes: course.estimatedDurationMinutes,
+            lessonType: course.lessonType,
+            language: course.language,
+            xpReward: course.xpReward,
             description: course.description ?? undefined
           };
         });
@@ -4102,7 +4106,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection = 'da
             <CourseContentView
               course={selectedCourseDetails}
               onClose={handleCloseCourseDetails}
-              realCourseId={realCourseIds.get(selectedCourseDetails.id) || ''}
+              realCourseId={selectedCourseDetails.id}
             />
           </div>
         </div>

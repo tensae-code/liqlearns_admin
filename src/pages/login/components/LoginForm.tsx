@@ -146,8 +146,11 @@ const LoginForm = ({ className = '' }: LoginFormProps) => {
     setForgotPasswordError('');
 
     try {
+      const resetRedirectUrl =
+        import.meta.env.VITE_SUPABASE_RESET_REDIRECT_URL ||
+        `${window.location.origin}/reset-password`;
       const { error } = await supabase.auth.resetPasswordForEmail(forgotPasswordEmail, {
-        redirectTo: `${window.location.origin}/reset-password`
+        redirectTo: resetRedirectUrl
       });
 
       if (error) throw error;

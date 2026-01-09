@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../contexts/AuthContext';
@@ -148,7 +148,6 @@ const SignupForm = () => {
     country: 'ET',
     state: '',
     city: '',
-    policiesAccepted: '',
     sponsorName: '',
     applicationData: null as any,
     verificationType: 'phone' as 'phone' | 'email',
@@ -461,7 +460,7 @@ const SignupForm = () => {
       ...prev,
       applicationData
     }));
-    setStep(step + 1);
+    handleSubmit(applicationData);
   };
 
   const handleNext = () => {
@@ -549,37 +548,25 @@ const SignupForm = () => {
     
     setError('');
     
-    // UPDATED: Skip subscription step - go directly from verification to policy
+     
     if (step === 4 && formData.role === 'student') {
-      setStep(6); // Jump to policy agreement for students (skip application and subscription)
-    } else if (step === 5 && formData.role !== 'student') {
-      setStep(6); // After employee application, jump to policy agreement (skip subscription)
-    } else {
-      setStep(step + 1);
-    }
-  };
-
-  const handlePrevious = () => {
-    // UPDATED: Skip subscription step when going back
-    if (step === 6 && formData.role === 'student') {
-      setStep(4); // Back to verification (skip application and subscription)
-    } else if (step === 6 && formData.role !== 'student') {
-      setStep(5); // Back to application form (skip subscription)
-    } else {
-      setStep(step - 1);
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (!formData.policiesAccepted || formData.policiesAccepted !== 'true') {
-      setError('You must accept the terms and policies to continue');
+      handleSubmit();
       return;
     }
 
+    setStep(step + 1);
+  };
+
+  const handlePrevious = () => {
+    setStep(step - 1);
+  };
+
+  const handleSubmit = async (applicationDataOverride?: any) => {
     try {
       setLoading(true);
       
       const fullPhoneNumber = formData.phone;
+      const applicationData = applicationDataOverride ?? formData.applicationData;
       
       // UPDATED: Remove subscription_plan from metadata
       const metadata = {
@@ -599,20 +586,23 @@ const SignupForm = () => {
       
       if (signupError) throw signupError;
 
-      if (formData.role !== 'student' && formData.applicationData) {
+      if (formData.role !== 'student' && applicationData) {
         const { error: appError } = await supabase
           .from('role_approval_requests')
           .insert({
             user_id: data?.user?.id,
             requested_role: formData.role,
-            form_data: formData.applicationData,
+            form_data: applicationData,
             status: 'pending'
           });
-        
-        if (appError) throw appError;
+          
+        if (appError) {
+          console.error('Role approval insert error (role_approval_requests):', appError);
+          throw appError;
+        }
       }
 
-      setStep(7);
+      window.location.href = '/login';
     } catch (error: any) {
       console.error('Signup error:', error);
       setError(error.message || 'Failed to create account. Please try again.');
@@ -621,8 +611,8 @@ const SignupForm = () => {
     }
   };
 
-  // UPDATED: Total steps - removed subscription step (was 8, now 7 for students; was 9, now 8 for non-students)
-  const totalSteps = formData.role === 'student' ? 7 : 8;
+  const totalSteps = formData.role === 'student' ? 4 : 5;
+  const finalStep = totalSteps;
   const currentDisplayStep = step;
 
   return (
@@ -666,7 +656,7 @@ const SignupForm = () => {
           })}
         </div>
 
-        {/* Second Row: Steps 5-7/8 (if applicable) */}
+        {/* Second Row: Steps 5 (if applicable) */}
         {totalSteps > 4 && (
           <div className="flex items-center justify-between gap-2">
             {Array.from({ length: totalSteps - 4 }).map((_, index) => {
@@ -1080,81 +1070,8 @@ const SignupForm = () => {
         />
       )}
 
-      {/* Step 6: Policy Agreement - UPDATED step number */}
-      {step === 6 && (
-        <div className="space-y-6">
-          <div className="text-center mb-6">
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">Terms and Policies</h3>
-            <p className="text-gray-600">Review and accept our terms to create your account</p>
-          </div>
-          
-          <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6">
-            <div className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                id="policiesAccepted"
-                checked={formData.policiesAccepted === 'true'}
-                onChange={(e) => handleInputChange('policiesAccepted', e.target.checked ? 'true' : 'false')}
-                className="mt-1 w-5 h-5 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
-              />
-              <label htmlFor="policiesAccepted" className="flex-1 text-sm text-gray-700 leading-relaxed">
-                I agree to LiqLearns' <a href="#" className="text-orange-600 hover:text-orange-700 font-medium">Terms of Service</a> and <a href="#" className="text-orange-600 hover:text-orange-700 font-medium">Privacy Policy</a>. 
-                I understand that by creating an account, I consent to receive communications and agree to the platform's usage policies.
-              </label>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Step 7: Final Confirmation - UPDATED step number */}
-      {step === 7 && (
-        <div className="space-y-6">
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-green-500" />
-            </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">Account Created Successfully!</h3>
-            <p className="text-gray-600">
-              Welcome to LiqLearns! You can now sign in to access your dashboard.
-            </p>
-          </div>
-          
-          <div className="bg-gradient-to-br from-orange-50 to-purple-50 rounded-2xl p-6 space-y-3">
-            <div className="flex items-center justify-between py-2 border-b border-gray-200">
-              <span className="text-sm font-medium text-gray-600">Username</span>
-              <span className="text-sm font-semibold text-gray-900">{formData.username}</span>
-            </div>
-            <div className="flex items-center justify-between py-2 border-b border-gray-200">
-              <span className="text-sm font-medium text-gray-600">Email</span>
-              <span className="text-sm font-semibold text-gray-900">{formData.email}</span>
-            </div>
-            <div className="flex items-center justify-between py-2">
-              <span className="text-sm font-medium text-gray-600">Role</span>
-              <span className="text-sm font-semibold text-gray-900 capitalize">{formData.role}</span>
-            </div>
-            {formData.sponsorName && (
-              <div className="flex items-center justify-between py-2">
-                <span className="text-sm font-medium text-gray-600">Referred By</span>
-                <span className="text-sm font-semibold text-gray-900">{formData.sponsorName}</span>
-              </div>
-            )}
-          </div>
-
-          <Button
-            type="button"
-            onClick={() => {
-              window.location.href = '/login';
-            }}
-            variant="default"
-            fullWidth
-          >
-            Continue to Sign In
-          </Button>
-        </div>
-      )}
-
-      {/* Navigation Buttons - UPDATED step numbers */}
-      {step < 7 && step !== 5 && (
+      {/* Navigation Buttons */}
+      {step <= finalStep && step !== 5 && (
         <div className="flex justify-between items-center pt-6 border-t border-gray-200">
           <Button
             type="button"
@@ -1165,7 +1082,7 @@ const SignupForm = () => {
             ← Previous
           </Button>
 
-          {step < 6 ? (
+         {step < finalStep ? (
             <Button
               type="button"
               onClick={handleNext}
@@ -1174,7 +1091,7 @@ const SignupForm = () => {
             >
               Next →
             </Button>
-          ) : step === 6 ? (
+          ) : step === finalStep ? (
             <Button
               type="button"
               onClick={handleSubmit}

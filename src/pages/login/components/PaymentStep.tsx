@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+/*! import React, { useState, useEffect } from 'react';  
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { CreditCard, Loader2, AlertCircle, CheckCircle, Mail } from 'lucide-react';
@@ -163,8 +163,8 @@ const PaymentForm: React.FC<Omit<PaymentStepProps, 'onRequestInvoice'>> = ({
         </div>
       </div>
 
-      {/* Card Input */}
-      <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 focus-within:border-orange-500 transition-colors">
+      {/* Card Input *//*}
+      /*<div className="bg-white rounded-2xl border-2 border-gray-200 p-6 focus-within:border-orange-500 transition-colors">
         <label className="block text-sm font-medium text-gray-700 mb-3">
           Card Information
         </label>
@@ -177,7 +177,7 @@ const PaymentForm: React.FC<Omit<PaymentStepProps, 'onRequestInvoice'>> = ({
         />
       </div>
 
-      {/* Security Notice */}
+      {/* Security Notice *//*}
       <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start gap-3">
         <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
         <div className="text-sm text-green-800">
@@ -186,7 +186,7 @@ const PaymentForm: React.FC<Omit<PaymentStepProps, 'onRequestInvoice'>> = ({
         </div>
       </div>
 
-      {/* Error Message */}
+      {/* Error Message *//*}
       {paymentError && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -197,7 +197,7 @@ const PaymentForm: React.FC<Omit<PaymentStepProps, 'onRequestInvoice'>> = ({
         </div>
       )}
 
-      {/* Submit Button */}
+      {/* Submit Button *//*}
       <Button
         type="submit"
         variant="default"
@@ -218,7 +218,7 @@ const PaymentForm: React.FC<Omit<PaymentStepProps, 'onRequestInvoice'>> = ({
         )}
       </Button>
 
-      {/* Trial Notice */}
+      {/* Trial Notice *//*}
       <div className="text-center text-sm text-gray-600">
         <p>
           Your card will be charged ${price} {billingCycle === 'yearly' ? 'annually' : 'monthly'}
@@ -236,7 +236,7 @@ const PaymentStep: React.FC<PaymentStepProps> = (props) => {
         <PaymentForm {...props} />
       </Elements>
 
-      {/* Alternative Payment Option */}
+      {/* Alternative Payment Option *//*}
       <div className="relative">
         <div className="absolute inset-0 flex items-center">
           <div className="w-full border-t border-gray-300"></div>

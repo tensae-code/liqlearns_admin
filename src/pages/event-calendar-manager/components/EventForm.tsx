@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import DatePicker from 'react-datepicker';
+import { format, parse } from 'date-fns';
+import 'react-datepicker/dist/react-datepicker.css';
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 import Select from '../../../components/ui/Select';
@@ -21,6 +24,10 @@ const EventForm = ({
   isLoading = false,
   className = ''
 }: EventFormProps) => {
+  const initialSelectedDate = useMemo(() => {
+    if (!initialData?.date) return null;
+    return parse(initialData.date, 'yyyy-MM-dd', new Date());
+  }, [initialData?.date]);
   const [formData, setFormData] = useState<EventFormData>({
     title: initialData?.title || '',
     description: initialData?.description || '',
@@ -39,7 +46,7 @@ const EventForm = ({
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof EventFormData, string>>>({});
-
+  const [selectedDate, setSelectedDate] = useState<Date | null>(initialSelectedDate);
   const eventTypeOptions = [
     { value: 'live-session', label: 'Live Session' },
     { value: 'tutoring', label: '1-to-1 Tutoring' },
@@ -112,6 +119,10 @@ const EventForm = ({
     if (validateForm()) {
       onSubmit(formData);
     }
+  };
+  const handleDateChange = (date: Date | null) => {
+    setSelectedDate(date);
+    handleInputChange('date', date ? format(date, 'yyyy-MM-dd') : '');
   };
 
   return (
@@ -201,14 +212,25 @@ const EventForm = ({
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Input
-            label="Date"
-            type="date"
-            value={formData.date}
-            onChange={(e) => handleInputChange('date', e.target.value)}
-            error={errors.date}
-            required
-          />
+          <div className="space-y-2">
+            <label className="text-sm font-medium leading-none">
+              Date <span className="text-error">*</span>
+            </label>
+            <DatePicker
+              selected={selectedDate}
+              onChange={handleDateChange}
+              dateFormat="yyyy-MM-dd"
+              placeholderText="Select date"
+              className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 ${
+                errors.date ? 'border-red-500 focus-visible:ring-red-500' : 'border-input'
+              }`}
+              popperClassName="z-[1200]"
+              required
+            />
+            {errors.date && (
+              <p className="text-sm text-red-500">{errors.date}</p>
+            )}
+          </div>
 
           <Input
             label="Start Time"

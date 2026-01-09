@@ -55,6 +55,7 @@ const StudyRoomHub: React.FC<StudyRoomHubProps> = ({ userId: propUserId }) => {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const [retryAttempt, setRetryAttempt] = useState(0);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
+const [creatingRoom, setCreatingRoom] = useState(false);
 
   // Add missing functions
   const loadAvailableRooms = async () => {
@@ -77,7 +78,7 @@ const StudyRoomHub: React.FC<StudyRoomHubProps> = ({ userId: propUserId }) => {
       
       // Test realtime connection
       const channel = supabase
-        .channel('connection_test')
+        .channel('study_room_connection_check')
         .on('presence', { event: 'sync' }, () => {
           console.log('Realtime connected');
           setConnectionStatus('connected');
@@ -113,6 +114,65 @@ const StudyRoomHub: React.FC<StudyRoomHubProps> = ({ userId: propUserId }) => {
       setLoading(false);
     }
   };
+  const getParticipantInfo = async () => {
+    if (!user?.id) {
+      throw new Error('You must be logged in to join a room');
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('full_name, avatar_url')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError) {
+      console.warn('Unable to load profile for study room:', profileError.message);
+    }
+
+    return {
+      display_name: profile?.full_name || 'Student',
+      avatar_url: profile?.avatar_url || null,
+      current_course: null,
+    };
+  };
+
+  const handleCreateRoom = async () => {
+    if (!user?.id) {
+      setError('You must be logged in to create a room');
+      return;
+    }
+
+    const roomName = window.prompt('Enter a name for your study room');
+    if (!roomName?.trim()) {
+      return;
+    }
+
+    try {
+      setError(null);
+      setCreatingRoom(true);
+
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('date_of_birth')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) throw profileError;
+
+      if (!profile?.date_of_birth) {
+        setError('Please set your date of birth in settings before creating a room.');
+        return;
+      }
+
+      await studyRoomService.createStudyRoom(roomName.trim(), profile.date_of_birth);
+      await loadRooms();
+    } catch (err: any) {
+      console.error('Error creating room:', err);
+      setError(err.message || 'Failed to create room');
+    } finally {
+      setCreatingRoom(false);
+    }
+  };
 
   const handleJoinRoom = async (roomId: string) => {
     if (!user?.id) {
@@ -124,8 +184,8 @@ const StudyRoomHub: React.FC<StudyRoomHubProps> = ({ userId: propUserId }) => {
       setError(null);
       setRetryAttempt(0);
 
-      await studyRoomService.joinRoom(roomId, user.id);
-      
+      const participantInfo = await getParticipantInfo();
+      await studyRoomService.joinRoom(roomId, participantInfo);
       // Refresh rooms to show updated participant count
       await loadRooms();
       
@@ -249,14 +309,13 @@ const StudyRoomHub: React.FC<StudyRoomHubProps> = ({ userId: propUserId }) => {
                 <h1 className="text-3xl font-bold text-gray-900">Study Rooms</h1>
                 <p className="text-gray-600 mt-2">Join a collaborative study session</p>
               </div>
-              <button
-                onClick={async () => {
-                  // ... keep existing create room logic ...
-                }}
+               <button
+                onClick={handleCreateRoom}
+                disabled={creatingRoom}
                 className="px-6 py-3 bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition-colors flex items-center gap-2"
               >
                 <Users className="h-5 w-5" />
-                Create Room
+                {creatingRoom ? 'Creating...' : 'Create Room'}
               </button>
             </div>
           </div>

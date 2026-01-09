@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { BookOpen, Users, FileText, Award, Package, Upload, Edit3, Plus, Check, Share2, Calendar, BarChart3, Clock, Target, TrendingUp, UserCheck, BookMarked, Video, MessageCircle, Download } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
+import { supabase } from '../../../lib/supabase';
 
 interface TeacherDashboardProps {
   activeSection?: string;
@@ -8,6 +10,7 @@ interface TeacherDashboardProps {
 
 export default function TeacherDashboard({ activeSection = 'dashboard' }: TeacherDashboardProps) {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [uploadData, setUploadData] = useState({
     title: '',
@@ -22,6 +25,20 @@ export default function TeacherDashboard({ activeSection = 'dashboard' }: Teache
     }
   });
 
+  const [classes, setClasses] = useState<Record<string, any>[]>([]);
+  const [sessions, setSessions] = useState<Record<string, any>[]>([]);
+  const [assignments, setAssignments] = useState<Record<string, any>[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
+
+  const [createClassForm, setCreateClassForm] = useState({
+    name: '',
+    subject: '',
+    description: ''
+  });
+  const [isCreatingClass, setIsCreatingClass] = useState(false);
+  const [createClassError, setCreateClassError] = useState<string | null>(null);
+
   // Add this block - Define students array
   const students = [
     { name: 'John Doe', courses: 3, progress: 78, status: 'Active' },
@@ -29,6 +46,32 @@ export default function TeacherDashboard({ activeSection = 'dashboard' }: Teache
     { name: 'Mike Johnson', courses: 4, progress: 65, status: 'Active' },
     { name: 'Sarah Wilson', courses: 2, progress: 45, status: 'Active' }
   ];
+
+  const classLabelMap = useMemo(() => {
+    return new Map(
+      classes
+        .filter((cls) => cls?.id !== undefined && cls?.id !== null)
+        .map((cls) => [cls.id, cls.name || cls.title || 'Untitled class'])
+    );
+  }, [classes]);
+
+  const openModalRoute = (modal: 'create-class' | 'manage-class', classId?: string | number) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('modal', modal);
+    if (classId) {
+      nextParams.set('classId', String(classId));
+    } else {
+      nextParams.delete('classId');
+    }
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const closeModalRoute = () => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('modal');
+    nextParams.delete('classId');
+    setSearchParams(nextParams, { replace: true });
+  };
 
   // NEW: Classes section
   const renderClassesSection = () => {
@@ -40,73 +83,102 @@ export default function TeacherDashboard({ activeSection = 'dashboard' }: Teache
               <BookOpen className="w-7 h-7 text-blue-600" />
               My Classes
             </h3>
-            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-medium">
+            <button
+              onClick={handleCreateClass}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-medium"
+            >
               <Plus className="w-4 h-4" />
               Create Class
             </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              { name: 'Amharic Beginners', students: 24, schedule: 'Mon, Wed, Fri 10:00 AM', progress: 65 },
-              { name: 'Advanced Grammar', students: 18, schedule: 'Tue, Thu 2:00 PM', progress: 42 },
-              { name: 'Conversation Practice', students: 15, schedule: 'Daily 4:00 PM', progress: 78 }
-            ].map((cls, idx) => (
-              <div key={idx} className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200 hover:shadow-lg transition-shadow">
-                <div className="flex items-center justify-between mb-4">
-                  <BookOpen className="w-10 h-10 text-blue-600" />
-                  <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
-                    {cls.students} students
-                  </span>
-                </div>
-                <h4 className="text-lg font-bold text-gray-900 mb-2">{cls.name}</h4>
-                <p className="text-sm text-gray-600 mb-4 flex items-center gap-2">
-                  <Clock className="w-4 h-4" />
-                  {cls.schedule}
-                </p>
-                <div className="mb-3">
-                  <div className="flex justify-between text-xs text-gray-700 mb-1">
-                    <span>Progress</span>
-                    <span className="font-bold">{cls.progress}%</span>
+            {classes.length > 0 ? (
+              classes.map((cls) => {
+                const progress = Number(cls.progress ?? cls.completion ?? 0);
+                const studentCount = cls.student_count ?? cls.students ?? cls.enrolled_students ?? 0;
+                const schedule = cls.schedule ?? cls.meeting_time ?? cls.meeting_schedule ?? 'Schedule TBD';
+
+                return (
+                  <div
+                    key={cls.id || cls.name || cls.title}
+                    className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200 hover:shadow-lg transition-shadow"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <BookOpen className="w-10 h-10 text-blue-600" />
+                      <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
+                        {studentCount} students
+                      </span>
+                    </div>
+                    <h4 className="text-lg font-bold text-gray-900 mb-2">{cls.name || cls.title || 'Untitled class'}</h4>
+                    <p className="text-sm text-gray-600 mb-4 flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      {schedule}
+                    </p>
+                    <div className="mb-3">
+                      <div className="flex justify-between text-xs text-gray-700 mb-1">
+                        <span>Progress</span>
+                        <span className="font-bold">{progress}%</span>
+                      </div>
+                      <div className="w-full bg-white rounded-full h-2">
+                        <div
+                          className="bg-blue-600 h-2 rounded-full transition-all"
+                          style={{ width: `${progress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleManageClass(cls.id)}
+                      className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+                    >
+                      Manage Class
+                    </button>
                   </div>
-                  <div className="w-full bg-white rounded-full h-2">
-                    <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all" 
-                      style={{ width: `${cls.progress}%` }}
-                    ></div>
-                  </div>
-                </div>
-                <button className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm">
-                  Manage Class
-                </button>
+                );
+              })
+            ) : (
+              <div className="col-span-full rounded-xl border border-dashed border-blue-200 p-6 text-center text-gray-600">
+                {isLoadingData ? 'Loading classes...' : 'No classes yet. Create your first class to get started.'}
               </div>
-            ))}
+            )}
           </div>
         </div>
 
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200">
           <h3 className="text-xl font-bold text-gray-900 mb-4">Upcoming Sessions</h3>
           <div className="space-y-3">
-            {[
-              { class: 'Amharic Beginners', time: 'Today 10:00 AM', students: 24, type: 'Live Class' },
-              { class: 'Advanced Grammar', time: 'Tomorrow 2:00 PM', students: 18, type: 'Workshop' },
-              { class: 'Conversation Practice', time: 'Today 4:00 PM', students: 15, type: 'Practice Session' }
-            ].map((session, idx) => (
-              <div key={idx} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Video className="w-6 h-6 text-blue-600" />
+            {sessions.length > 0 ? (
+              sessions.map((session) => {
+                const sessionClass = classLabelMap.get(session.class_id) || session.class_name || session.class || 'Class session';
+                const sessionTime = session.scheduled_at || session.starts_at || session.time || 'Scheduled time TBD';
+                const attendeeCount = session.attendees ?? session.student_count ?? session.students ?? 0;
+                const sessionType = session.type || session.session_type || 'Live Class';
+
+                return (
+                  <div
+                    key={session.id || `${session.class_id}-${sessionTime}`}
+                    className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <Video className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-gray-900">{sessionClass}</h4>
+                        <p className="text-sm text-gray-600">{sessionTime} • {attendeeCount} students</p>
+                      </div>
+                    </div>
+                    <span className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                      {sessionType}
+                    </span>
                   </div>
-                  <div>
-                    <h4 className="font-bold text-gray-900">{session.class}</h4>
-                    <p className="text-sm text-gray-600">{session.time} • {session.students} students</p>
-                  </div>
-                </div>
-                <span className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
-                  {session.type}
-                </span>
+                );
+              })
+            ) : (
+              <div className="rounded-lg border border-dashed border-gray-200 p-4 text-center text-sm text-gray-500">
+                {isLoadingData ? 'Loading sessions...' : 'No upcoming sessions scheduled yet.'}
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>
@@ -129,7 +201,10 @@ export default function TeacherDashboard({ activeSection = 'dashboard' }: Teache
                 placeholder="Search students..."
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
               />
-              <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 text-sm font-medium">
+              <button
+                onClick={handleAddStudent}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 text-sm font-medium"
+              >
                 <Plus className="w-4 h-4" />
                 Add Student
               </button>
@@ -225,8 +300,10 @@ export default function TeacherDashboard({ activeSection = 'dashboard' }: Teache
               <FileText className="w-7 h-7 text-orange-600" />
               Content Library
             </h3>
-            <button className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2 text-sm font-medium">
-              <Upload className="w-4 h-4" />
+            <button
+              onClick={handleUploadContent}
+              className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2 text-sm font-medium"
+            >
               Upload Content
             </button>
           </div>
@@ -300,7 +377,10 @@ export default function TeacherDashboard({ activeSection = 'dashboard' }: Teache
               <BarChart3 className="w-7 h-7 text-indigo-600" />
               Performance Reports
             </h3>
-            <button className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 text-sm font-medium">
+            <button
+              onClick={handleExportReport}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 text-sm font-medium"
+              >
               <FileText className="w-4 h-4" />
               Export Report
             </button>
@@ -832,14 +912,117 @@ export default function TeacherDashboard({ activeSection = 'dashboard' }: Teache
   const [showManageClassModal, setShowManageClassModal] = useState(false);
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [showUploadContentModal, setShowUploadContentModal] = useState(false);
+  const [selectedClassId, setSelectedClassId] = useState<string | number | null>(null);
 
-  const handleManageClass = () => {
-    setShowManageClassModal(true);
+  useEffect(() => {
+    const modal = searchParams.get('modal');
+    const classId = searchParams.get('classId');
+    setShowCreateClassModal(modal === 'create-class');
+    setShowManageClassModal(modal === 'manage-class');
+    setSelectedClassId(classId || null);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (showCreateClassModal) {
+      setCreateClassForm({ name: '', subject: '', description: '' });
+      setCreateClassError(null);
+    }
+  }, [showCreateClassModal]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchClasses = async () => {
+      const baseQuery = supabase.from('classes').select('*').order('created_at', { ascending: false });
+      if (!user?.id) {
+        const { data, error } = await baseQuery;
+        if (error) throw error;
+        return data || [];
+      }
+
+      const { data: teacherClasses, error: teacherError } = await baseQuery.eq('teacher_id', user.id);
+      if (!teacherError) {
+        return teacherClasses || [];
+      }
+      if (teacherError?.message?.includes('teacher_id')) {
+        const { data: instructorClasses, error: instructorError } = await baseQuery.eq('instructor_id', user.id);
+        if (!instructorError) {
+          return instructorClasses || [];
+        }
+      }
+      const { data, error } = await baseQuery;
+      if (error) throw error;
+      return data || [];
+    };
+
+    const fetchSessions = async (classIds: Array<string | number>) => {
+      let query = supabase.from('sessions').select('*').order('scheduled_at', { ascending: true });
+      if (classIds.length > 0) {
+        query = query.in('class_id', classIds);
+      }
+      const { data, error } = await query;
+      if (error && classIds.length > 0 && error.message?.includes('class_id')) {
+        const { data: fallbackData } = await supabase.from('sessions').select('*').order('scheduled_at', { ascending: true });
+        return fallbackData || [];
+      }
+      if (error) throw error;
+      return data || [];
+    };
+
+    const fetchAssignments = async (classIds: Array<string | number>) => {
+      let query = supabase.from('assignments').select('*').order('due_date', { ascending: true });
+      if (classIds.length > 0) {
+        query = query.in('class_id', classIds);
+      }
+      const { data, error } = await query;
+      if (error && classIds.length > 0 && error.message?.includes('class_id')) {
+        const { data: fallbackData } = await supabase.from('assignments').select('*').order('due_date', { ascending: true });
+        return fallbackData || [];
+      }
+      if (error) throw error;
+      return data || [];
+    };
+
+    const loadData = async () => {
+      setIsLoadingData(true);
+      setDataError(null);
+      try {
+        const classData = await fetchClasses();
+        if (!isMounted) return;
+        setClasses(classData);
+        const classIds = classData.map((cls) => cls.id).filter((id) => id !== undefined && id !== null);
+        const [sessionData, assignmentData] = await Promise.all([
+          fetchSessions(classIds),
+          fetchAssignments(classIds)
+        ]);
+        if (!isMounted) return;
+        setSessions(sessionData);
+        setAssignments(assignmentData);
+      } catch (error) {
+        if (!isMounted) return;
+        console.error('Error loading teacher data:', error);
+        setDataError('Unable to load class data. Please refresh or try again later.');
+      } finally {
+        if (isMounted) {
+          setIsLoadingData(false);
+        }
+      }
+    };
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
+
+  const handleManageClass = (classId?: string | number) => {
+    openModalRoute('manage-class', classId);
   };
 
   const handleCreateClass = () => {
-    setShowCreateClassModal(true);
+    openModalRoute('create-class');
   };
+
 
   const handleAddStudent = () => {
     setShowAddStudentModal(true);
@@ -877,6 +1060,40 @@ export default function TeacherDashboard({ activeSection = 'dashboard' }: Teache
     }
   };
 
+  const handleCreateClassSubmit = async () => {
+    if (!createClassForm.name.trim()) {
+      setCreateClassError('Class name is required.');
+      return;
+    }
+
+    setIsCreatingClass(true);
+    setCreateClassError(null);
+    try {
+      const { data, error } = await supabase
+        .from('classes')
+        .insert({
+          name: createClassForm.name.trim(),
+          subject: createClassForm.subject.trim() || null,
+          description: createClassForm.description.trim() || null,
+          teacher_id: user?.id || null
+        })
+        .select('*')
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      setClasses((prev) => [data, ...prev]);
+      closeModalRoute();
+    } catch (error) {
+      console.error('Error creating class:', error);
+      setCreateClassError('Unable to create class. Please try again.');
+    } finally {
+      setIsCreatingClass(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-orange-50 to-white">
       {/* Welcome header */}
@@ -888,6 +1105,11 @@ export default function TeacherDashboard({ activeSection = 'dashboard' }: Teache
       </div>
 
       {/* Content area - render based on activeSection */}
+      {dataError && (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {dataError}
+        </div>
+      )}
       {activeSection === 'dashboard' && renderDashboardSection()}
       {activeSection === 'classes' && renderClassesSection()}
       {activeSection === 'students' && renderStudentsSection()}
@@ -945,35 +1167,103 @@ export default function TeacherDashboard({ activeSection = 'dashboard' }: Teache
               <input
                 type="text"
                 placeholder="Class Name"
+                value={createClassForm.name}
+                onChange={(event) => setCreateClassForm((prev) => ({ ...prev, name: event.target.value }))}
                 className="w-full px-4 py-2 border rounded-lg"
               />
               <input
                 type="text"
                 placeholder="Subject"
+                value={createClassForm.subject}
+                onChange={(event) => setCreateClassForm((prev) => ({ ...prev, subject: event.target.value }))}
                 className="w-full px-4 py-2 border rounded-lg"
               />
               <textarea
                 placeholder="Description"
+                value={createClassForm.description}
+                onChange={(event) => setCreateClassForm((prev) => ({ ...prev, description: event.target.value }))}
                 className="w-full px-4 py-2 border rounded-lg"
                 rows={3}
               />
+              {createClassError && (
+                <p className="text-sm text-red-600">{createClassError}</p>
+              )}
               <div className="flex gap-2">
                 <button
-                  onClick={() => {
-                    alert('Class created successfully!');
-                    setShowCreateClassModal(false);
-                  }}
-                  className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                  onClick={handleCreateClassSubmit}
+                  className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-70"
+                  disabled={isCreatingClass}
                 >
-                  Create
+                  {isCreatingClass ? 'Creating...' : 'Create'}
                 </button>
                 <button
-                  onClick={() => setShowCreateClassModal(false)}
+                  onClick={closeModalRoute}
                   className="flex-1 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
                 >
                   Cancel
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Class Modal */}
+      {showManageClassModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <h3 className="text-xl font-bold mb-4">Manage Classes</h3>
+            <div className="space-y-4">
+              {classes.length > 0 ? (
+                classes.map((cls) => {
+                  const classId = cls.id;
+                  const matchingSessions = sessions.filter((session) => session.class_id === classId);
+                  const matchingAssignments = assignments.filter((assignment) => assignment.class_id === classId);
+                  const isSelected = selectedClassId ? String(selectedClassId) === String(classId) : false;
+
+                  return (
+                    <div
+                      key={classId || cls.name || cls.title}
+                      className={`border rounded-lg p-4 ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-gray-900">{cls.name || cls.title || 'Untitled class'}</p>
+                          <p className="text-sm text-gray-600">{cls.subject || cls.category || 'Subject TBD'}</p>
+                          {cls.description && <p className="text-xs text-gray-500 mt-2">{cls.description}</p>}
+                        </div>
+                        <button
+                          onClick={() => setSelectedClassId(classId)}
+                          className="px-3 py-1 text-xs font-medium text-blue-600 border border-blue-200 rounded-full hover:bg-blue-100"
+                        >
+                          {isSelected ? 'Selected' : 'Select'}
+                        </button>
+                      </div>
+                      <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-gray-700">
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <p className="text-xs text-gray-500">Sessions</p>
+                          <p className="text-lg font-semibold">{matchingSessions.length}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <p className="text-xs text-gray-500">Assignments</p>
+                          <p className="text-lg font-semibold">{matchingAssignments.length}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="border rounded-lg p-4">
+                  <p className="font-medium">No classes yet</p>
+                  <p className="text-gray-600 text-sm">Create your first class to get started</p>
+                </div>
+              )}
+              <button
+                onClick={closeModalRoute}
+                className="w-full bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

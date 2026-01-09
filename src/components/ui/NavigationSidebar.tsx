@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Icon from '../AppIcon';
 
 interface NavigationItem {
   label: string;
   section: string;
   icon: string;
+  route: string;
 }
 
 interface NavigationCategory {
@@ -30,6 +31,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
   onSectionChange
 }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('dashboard');
 
   const navigationCategories: NavigationCategory[] = [
@@ -37,37 +39,45 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
       label: 'Users & Network',
       icon: 'Users',
       items: [
-        { label: 'User Management', section: 'users', icon: 'UserCheck' },
-        { label: 'Progress Analytics', section: 'analytics', icon: 'BarChart3' },
+        { label: 'User Management', section: 'users', icon: 'UserCheck', route: '/user-management-dashboard' },
+        { label: 'Progress Analytics', section: 'analytics', icon: 'BarChart3', route: '/progress-analytics-panel' },
       ],
     },
     {
       label: 'Content & Events',
       icon: 'BookOpen',
       items: [
-        { label: 'Content Management', section: 'content', icon: 'FileText' },
-        { label: 'Event Calendar', section: 'events', icon: 'Calendar' },
+        { label: 'Content Management', section: 'content', icon: 'FileText', route: '/content-management-hub' },
+        { label: 'Event Calendar', section: 'events', icon: 'Calendar', route: '/event-calendar-manager' },
       ],
     },
     {
       label: 'Financial & Commerce',
       icon: 'DollarSign',
       items: [
-        { label: 'Financial Dashboard', section: 'financial', icon: 'TrendingUp' },
-        { label: 'Store Management', section: 'store', icon: 'Store' },
+        { label: 'Financial Dashboard', section: 'financial', icon: 'TrendingUp', route: '/financial-dashboard' },
+        { label: 'Store Management', section: 'store', icon: 'Store', route: '/store-management-system' },
       ],
     },
   ];
 
-  const handleNavigationClick = (section: string) => {
-    setActiveSection(section);
-    
-    // Use hash-based navigation for embedded sections
-    window.location.hash = section;
+  useEffect(() => {
+    const activeItem = navigationCategories
+      .flatMap((category) => category.items)
+      .find((item) => item.route === location.pathname);
+
+    if (activeItem) {
+      setActiveSection(activeItem.section);
+    }
+  }, [location.pathname]);
+
+  const handleNavigationClick = (item: NavigationItem) => {
+    setActiveSection(item.section);
+    navigate(item.route);
     
     // If callback is provided, notify parent component
     if (onSectionChange) {
-      onSectionChange(section);
+      onSectionChange(item.section);
     }
     
     // Close mobile menu if open
@@ -132,7 +142,7 @@ const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
                       return (
                         <button
                           key={item.section}
-                          onClick={() => handleNavigationClick(item.section)}
+                          onClick={() => handleNavigationClick(item)}
                           className={`
                             flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200 ease-out w-full
                             ${isActive 

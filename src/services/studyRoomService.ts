@@ -166,6 +166,9 @@ class StudyRoomService {
   // Create a new study room
   async createStudyRoom(name: string, studentDateOfBirth: string, maxParticipants: number = 12): Promise<StudyRoom> {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
       const ageGroup = this.calculateAgeGroup(studentDateOfBirth);
       
       const { data, error } = await supabase

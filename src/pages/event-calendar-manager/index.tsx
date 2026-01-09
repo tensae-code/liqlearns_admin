@@ -494,7 +494,7 @@ const EventCalendarManager = () => {
       {/* Event Form Modal */}
       {showEventForm &&
       <div className="fixed inset-0 bg-black/50 z-[1100] flex items-center justify-center p-4">
-          <div className="bg-card rounded-lg border border-border max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+         <div className="relative z-[1110] bg-card rounded-lg border border-border max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-border">
               <h2 className="font-heading font-semibold text-xl text-card-foreground">
                 {editingEvent ? 'Edit Event' : 'Create New Event'}

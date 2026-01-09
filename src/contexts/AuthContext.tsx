@@ -184,34 +184,64 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('User not returned after sign up.');
       }
 
-      const profilePayload = {
-        user_id: data.user.id,
-        email,
-        full_name: options?.data?.full_name,
-        username: options?.data?.username,
-        phone: options?.data?.phone,
-        role: options?.data?.role,
-        sponsor_name: options?.data?.sponsor_name,
-        date_of_birth: options?.data?.date_of_birth,
-        address: options?.data?.address,
-        country: options?.data?.country,
-        state: options?.data?.state,
-        city: options?.data?.city
-      };
+      const userId = data.user.id;
+      const normalizedEmail = email.trim().toLowerCase();
+      const emailFallbackName = normalizedEmail.split('@')[0];
+      const fullName = options?.data?.full_name?.trim() || emailFallbackName;
+      const username = options?.data?.username?.trim() || emailFallbackName;
+      const role = options?.data?.role || 'student';
 
-      const { data: profileData, error: profileError } = await supabase.functions.invoke(
-        'create-user-profile',
-        {
-          body: profilePayload
-        }
-      );
-
-      if (profileError) {
-        throw profileError;
+      if (!normalizedEmail || !fullName || !role) {
+        throw new Error('Please provide your name and role to finish creating your account.');
       }
 
-      if (profileData?.error) {
-        throw new Error(profileData.error);
+      const profilePayload = {
+        id: userId,
+        email: normalizedEmail,
+        full_name: fullName,
+        username,
+        phone: options?.data?.phone || null,
+        role,
+        sponsor_name: options?.data?.sponsor_name || null,
+        date_of_birth: options?.data?.date_of_birth || null,
+        address: options?.data?.address || null,
+        country: options?.data?.country || null,
+        state: options?.data?.state || null,
+        city: options?.data?.city || null
+      };
+
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .insert(profilePayload);
+
+      if (profileError) {
+        console.error('Profile insert error (user_profiles):', {
+          userId,
+          error: profileError
+        });
+
+        const isDuplicate = profileError.code === '23505' || profileError.message?.includes('duplicate');
+        if (!isDuplicate) {
+          throw new Error('We could not finish creating your profile. Please contact support.');
+        }
+      }
+
+      if (role === 'student') {
+        const { error: studentProfileError } = await supabase
+          .from('student_profiles')
+          .insert({ id: userId });
+
+        if (studentProfileError) {
+          console.error('Profile insert error (student_profiles):', {
+            userId,
+            error: studentProfileError
+          });
+
+          const isDuplicate = studentProfileError.code === '23505' || studentProfileError.message?.includes('duplicate');
+          if (!isDuplicate) {
+            throw new Error('We could not finish creating your student profile. Please contact support.');
+          }
+        }
       }
 
       // STRIPE INTEGRATION REMOVED: Stripe customer creation code removed

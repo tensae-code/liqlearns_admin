@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { BookOpen, Facebook, Instagram, Youtube, Target, Headphones, Monitor } from 'lucide-react';
 import { FaTiktok } from 'react-icons/fa';
 import { useAuth } from '../../contexts/AuthContext';
@@ -152,11 +152,27 @@ const LandingPage: React.FC = () => {
                 Platform
               </h3>
               <ul className="space-y-2 text-sm text-gray-400">
-                <li className="hover:text-orange-500 cursor-pointer transition-colors">Courses</li>
-                <li className="hover:text-orange-500 cursor-pointer transition-colors">Community</li>
-                <li className="hover:text-orange-500 cursor-pointer transition-colors">Marketplace</li>
-                <li className="hover:text-orange-500 cursor-pointer transition-colors">Business Hub</li>
-              </ul>
+                <li>
+                  <Link className="hover:text-orange-500 transition-colors" to="/courses">
+                    Courses
+                  </Link>
+                </li>
+                <li>
+                  <Link className="hover:text-orange-500 transition-colors" to="/community">
+                    Community
+                  </Link>
+                </li>
+                <li>
+                  <Link className="hover:text-orange-500 transition-colors" to="/marketplace">
+                    Marketplace
+                  </Link>
+                </li>
+                <li>
+                  <Link className="hover:text-orange-500 transition-colors" to="/business-hub">
+                    Business Hub
+                  </Link>
+                </li>
+               </ul>
             </div>
 
             {/* Support */}
@@ -166,10 +182,26 @@ const LandingPage: React.FC = () => {
                 Support
               </h3>
               <ul className="space-y-2 text-sm text-gray-400">
-                <li className="hover:text-orange-500 cursor-pointer transition-colors">Help Center</li>
-                <li className="hover:text-orange-500 cursor-pointer transition-colors">Contact Us</li>
-                <li className="hover:text-orange-500 cursor-pointer transition-colors">Documentation</li>
-                <li className="hover:text-orange-500 cursor-pointer transition-colors">FAQ</li>
+                <li>
+                  <Link className="hover:text-orange-500 transition-colors" to="/help-center">
+                    Help Center
+                  </Link>
+                </li>
+                <li>
+                  <Link className="hover:text-orange-500 transition-colors" to="/contact-us">
+                    Contact Us
+                  </Link>
+                </li>
+                <li>
+                  <Link className="hover:text-orange-500 transition-colors" to="/documentation">
+                    Documentation
+                  </Link>
+                </li>
+                <li>
+                  <Link className="hover:text-orange-500 transition-colors" to="/faq">
+                    FAQ
+                  </Link>
+                </li>
               </ul>
             </div>
 
@@ -192,10 +224,16 @@ const LandingPage: React.FC = () => {
               © 2026 LiqLearns LLC. All rights reserved.
             </p>
             <div className="flex items-center space-x-6 mt-4 md:mt-0">
-              <span className="text-gray-400 text-sm hover:text-orange-500 cursor-pointer transition-colors">Privacy</span>
-              <span className="text-gray-400 text-sm hover:text-orange-500 cursor-pointer transition-colors">Terms</span>
-              <span className="text-gray-400 text-sm hover:text-orange-500 cursor-pointer transition-colors">Cookies</span>
-            </div>
+              <Link className="text-gray-400 text-sm hover:text-orange-500 transition-colors" to="/privacy">
+                Privacy
+              </Link>
+              <Link className="text-gray-400 text-sm hover:text-orange-500 transition-colors" to="/terms">
+                Terms
+              </Link>
+              <Link className="text-gray-400 text-sm hover:text-orange-500 transition-colors" to="/cookies">
+                Cookies
+              </Link>
+             </div>
           </div>
         </div>
       </footer>

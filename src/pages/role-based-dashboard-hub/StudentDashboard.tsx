@@ -21,6 +21,11 @@ interface StudentDashboardProps {
   activeSection?: string;
 }
 
+interface StudentStats {
+  enrolledCourses: number;
+  completedLessons: number;
+  currentStreak: number;
+}
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSection: initialSection = 'dashboard' }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -37,14 +42,16 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
   const [outcomeProgress, setOutcomeProgress] = useState<StudentOutcomeProgress[]>([]);
   const [lmsLoading, setLmsLoading] = useState(false);
   const [lmsError, setLmsError] = useState<string | null>(null);
-
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<StudentStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
   const [showStreakAnimation, setShowStreakAnimation] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
   const [showCourseDashboard, setShowCourseDashboard] = useState(false);
   const [skillProgress, setSkillProgress] = useState<any[]>([]);
   const [realCourseIds] = useState<Record<string, string>>({});
   const [courseOptions] = useState<any[]>([]);
+  const [progressTab, setProgressTab] = useState<'skills' | 'syllabus' | 'attendance' | 'outcomes'>('skills');
 
   // ... keep all existing state and functions ...
 
@@ -97,6 +104,86 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
 
     checkStreakAnimation();
   }, [user?.id, stats?.currentStreak]);
+  const fetchStudentStats = useCallback(async () => {
+    if (!user?.id) return;
+
+    setStatsLoading(true);
+    setStatsError(null);
+
+    try {
+      const { data, error } = await supabase
+        .from('student_stats')
+        .select('enrolled_courses, completed_lessons, current_streak')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data) {
+        setStats(null);
+      } else {
+        setStats({
+          enrolledCourses: data.enrolled_courses ?? 0,
+          completedLessons: data.completed_lessons ?? 0,
+          currentStreak: data.current_streak ?? 0
+        });
+      }
+    } catch (err: any) {
+      console.error('Error loading student stats:', err);
+      setStatsError(err?.message || 'Failed to load student stats');
+      setStats(null);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    fetchStudentStats();
+
+    const channel = supabase
+      .channel(`student_stats:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'student_stats',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          const record = payload.new as {
+            enrolled_courses?: number;
+            completed_lessons?: number;
+            current_streak?: number;
+          } | null;
+
+          if (!record) {
+            fetchStudentStats();
+            return;
+          }
+
+          setStats({
+            enrolledCourses: record.enrolled_courses ?? 0,
+            completedLessons: record.completed_lessons ?? 0,
+            currentStreak: record.current_streak ?? 0
+          });
+        }
+      )
+      .subscribe();
+
+    const pollingId = window.setInterval(() => {
+      fetchStudentStats();
+    }, 60000);
+
+    return () => {
+      window.clearInterval(pollingId);
+      supabase.removeChannel(channel);
+    };
+  }, [fetchStudentStats, user?.id]);
 
   // NEW: Load LMS data when needed
   useEffect(() => {
@@ -110,7 +197,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
         const courseUUID = realCourseIds[selectedCourse] || selectedCourse;
 
         // Load syllabus
-        const [syllabusData, currentWeek, attendanceData, stats, outcomes, progress] = await Promise.all([
+        const [syllabusData, currentWeek, attendanceData, attendanceStatsData, outcomes, progress] = await Promise.all([
           lmsService.getCourseSyllabus(courseUUID),
           lmsService.getCurrentWeekSyllabus(courseUUID),
           lmsService.getStudentAttendance(user.id, courseUUID),
@@ -122,7 +209,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
         setSyllabus(syllabusData);
         setCurrentWeekSyllabus(currentWeek);
         setAttendance(attendanceData);
-        setAttendanceStats(stats);
+        setAttendanceStats(attendanceStatsData);
         setCourseOutcomes(outcomes);
         setOutcomeProgress(progress);
       } catch (err: any) {
@@ -432,6 +519,19 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
   const renderDashboardSection = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-orange-50 to-white p-4 sm:p-6 lg:p-8">
+        {statsError && (
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+            {statsError}
+          </div>
+        )}
+
+        {!statsLoading && !stats && !statsError && (
+          <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6 text-center">
+            <h3 className="text-lg font-semibold text-gray-800">No stats yet</h3>
+            <p className="text-sm text-gray-600">Start learning to see your progress here.</p>
+          </div>
+        )}
+
         {/* Stats Cards Grid with hover effects */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* Enrolled Courses Stat */}
@@ -441,8 +541,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
                 <BookOpen className="w-6 h-6 text-orange-500" />
                 <h3 className="text-lg font-semibold text-gray-900">Enrolled</h3>
               </div>
-              <div className="text-2xl font-bold text-orange-500">0</div>
-            </div>
+              <div className="text-2xl font-bold text-orange-500">{stats?.enrolledCourses ?? 0}</div>
             <p className="text-sm text-gray-600">Active courses</p>
           </div>
 
@@ -453,8 +552,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
                 <Target className="w-6 h-6 text-orange-500" />
                 <h3 className="text-lg font-semibold text-gray-900">Completed</h3>
               </div>
-              <div className="text-2xl font-bold text-orange-500">0</div>
-            </div>
+              <div className="text-2xl font-bold text-orange-500">{stats?.completedLessons ?? 0}</div>
             <p className="text-sm text-gray-600">Lessons finished</p>
           </div>
 
@@ -512,8 +610,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ activeSectio
 
   // MODIFIED: Update renderProgressSection to include new LMS tabs
   const renderProgressSection = () => {
-    const [progressTab, setProgressTab] = useState<'skills' | 'syllabus' | 'attendance' | 'outcomes'>('skills');
-
     return (
       <div className="space-y-6">
         {selectedCourse && showCourseDashboard && (

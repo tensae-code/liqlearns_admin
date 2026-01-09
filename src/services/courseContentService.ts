@@ -339,10 +339,20 @@ class CourseContentService {
   }
 
   // NEW: Helper method to get actual course IDs from database
-  async getAvailableCourses(): Promise<{ id: string; title: string; type: string; description: string | null; difficultyLevel: string | null; estimatedDurationMinutes: number | null }[]> {
+  async getAvailableCourses(): Promise<{
+    id: string;
+    title: string;
+    type: string;
+    description: string | null;
+    difficultyLevel: string | null;
+    estimatedDurationMinutes: number | null;
+    lessonType: string | null;
+    language: string | null;
+    xpReward: number | null;
+  }[]> {
     const { data, error } = await supabase
       .from('courses')
-      .select('id, title, course_type, description, difficulty_level, estimated_duration_minutes')
+      .select('id, title, course_type, description, difficulty_level, estimated_duration_minutes, lesson_type, language, xp_reward')
       .eq('is_active', true)
       .order('title', { ascending: true });
 
@@ -355,7 +365,10 @@ class CourseContentService {
       type: course.course_type,
       description: course.description ?? null,
       difficultyLevel: course.difficulty_level ?? null,
-      estimatedDurationMinutes: course.estimated_duration_minutes ?? null
+      estimatedDurationMinutes: course.estimated_duration_minutes ?? null,
+      lessonType: course.lesson_type ?? null,
+      language: course.language ?? null,
+      xpReward: course.xp_reward ?? null
     }));
   }
 }

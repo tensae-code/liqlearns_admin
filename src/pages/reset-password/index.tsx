@@ -19,17 +19,34 @@ const ResetPasswordPage: React.FC = () => {
   const [validToken, setValidToken] = useState(false);
 
   useEffect(() => {
-    // Check if we have a valid recovery token
+   let isMounted = true;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isMounted) return;
+      if (event === 'PASSWORD_RECOVERY' && session) {
+        setValidToken(true);
+        setError('');
+      }
+    });
+
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+      if (!isMounted) return;
       if (session) {
         setValidToken(true);
-      } else {
+        return;
+      }
+
+      if (!window.location.hash.includes('type=recovery')) {
         setError('Invalid or expired reset link. Please request a new one.');
       }
     };
 
     checkSession();
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

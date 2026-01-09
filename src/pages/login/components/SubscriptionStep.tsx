@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+/*import React, { useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { CheckCircle, Star, Zap, Crown } from 'lucide-react';
 
@@ -85,7 +85,7 @@ const SubscriptionStep: React.FC<SubscriptionStepProps> = ({ selectedPlan, onPla
         <p className="text-gray-600">Select the plan that best fits your learning journey</p>
       </div>
 
-      {/* Billing Toggle */}
+      {/* Billing Toggle *//*}
       <div className="flex justify-center mb-6">
         <div className="inline-flex rounded-xl border border-gray-200 p-1 bg-gray-50">
           <button
@@ -112,9 +112,9 @@ const SubscriptionStep: React.FC<SubscriptionStepProps> = ({ selectedPlan, onPla
         </div>
       </div>
 
-      {/* Two-Column Layout: Left Sidebar + Right Card */}
+      {/* Two-Column Layout: Left Sidebar + Right Card *//*}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Sidebar: Plan Options */}
+        {/* Left Sidebar: Plan Options *//*}
         <div className="lg:col-span-2 space-y-4">
           {plans.map((plan) => (
             <button
@@ -157,7 +157,7 @@ const SubscriptionStep: React.FC<SubscriptionStepProps> = ({ selectedPlan, onPla
                 </div>
               </div>
 
-              {/* Feature List */}
+              {/* Feature List *//*}
               <div className="mt-4 grid grid-cols-2 gap-2">
                 {Object.entries(plan.features).map(([key, value]) => (
                   <div key={key} className="flex items-center gap-2 text-sm text-gray-700">
@@ -170,14 +170,14 @@ const SubscriptionStep: React.FC<SubscriptionStepProps> = ({ selectedPlan, onPla
           ))}
         </div>
 
-        {/* Right Card: Selected Plan Details */}
+        {/* Right Card: Selected Plan Details *//*}
         <div className="lg:col-span-1">
           <div className="sticky top-6 bg-gradient-to-br from-orange-50 to-purple-50 rounded-2xl p-6 border border-orange-200 shadow-lg">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Package Details</h3>
             
             {selectedPlanDetails ? (
               <div className="space-y-4">
-                {/* Plan Name and Icon */}
+                {/* Plan Name and Icon *//*}
                 <div className="flex items-center gap-3 pb-4 border-b border-gray-200">
                   <div className="p-3 bg-white rounded-xl shadow-sm">
                     {getPlanIcon(selectedPlanDetails.name)}
@@ -188,7 +188,7 @@ const SubscriptionStep: React.FC<SubscriptionStepProps> = ({ selectedPlan, onPla
                   </div>
                 </div>
 
-                {/* Pricing Summary */}
+                {/* Pricing Summary *//*}
                 <div className="bg-white rounded-xl p-4 shadow-sm">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-sm font-medium text-gray-700">
@@ -219,7 +219,7 @@ const SubscriptionStep: React.FC<SubscriptionStepProps> = ({ selectedPlan, onPla
                   )}
                 </div>
 
-                {/* Features Summary */}
+                {/* Features Summary *//*}
                 <div className="bg-white rounded-xl p-4 shadow-sm">
                   <h5 className="font-semibold text-gray-900 mb-3">What's Included</h5>
                   <div className="space-y-2">
@@ -234,7 +234,7 @@ const SubscriptionStep: React.FC<SubscriptionStepProps> = ({ selectedPlan, onPla
                   </div>
                 </div>
 
-                {/* Trial Notice */}
+                {/* Trial Notice *//*}
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                   <p className="text-sm text-blue-900">
                     <span className="font-semibold">3-Day Free Trial</span>
